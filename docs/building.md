@@ -62,3 +62,15 @@ in `apps/desktop/store.json`:
 Without `store.json` a test package with a placeholder identity is built; it can't be uploaded.
 Tile images are generated from the brand icon with `npm run store-assets -w @otto/desktop`.
 The Store version skips Otto's own update check: the Store updates it.
+
+## One-command release
+
+```bash
+scripts/release.sh 0.1.9 --store --publish
+```
+
+Add the version's entry to `apps/web/lib/changelog.ts` first: it becomes the GitHub release notes
+and the "What's new" list in the app. The script bumps the three `package.json` versions, runs the
+tests, builds the installer (and with `--store` the `.appx` for Partner Center). With `--publish` it
+commits the version bump, tags, pushes to `main` and creates the GitHub release. Without `--publish`
+nothing leaves your machine. Commit your feature changes before running it.
