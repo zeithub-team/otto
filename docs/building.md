@@ -42,3 +42,23 @@ gh release create v0.1.5 apps/desktop/release/v0.1.5/zeithub-otto-setup-0.1.5.ex
 Close it and build again.
 
 **SmartScreen warning on the installer** — expected until the installer is code-signed.
+
+## Microsoft Store
+
+```bash
+npm run dist:store -w @otto/desktop
+```
+
+The result is `apps/desktop/release/v<version>/zeithub-otto-<version>.appx`. The Store signs it on
+submission, so Smart App Control and SmartScreen don't block the Store version.
+
+The package identity comes from Partner Center (*Product management → Product identity*) and lives
+in `apps/desktop/store.json`:
+
+```json
+{ "identityName": "…", "publisher": "CN=…", "publisherDisplayName": "…" }
+```
+
+Without `store.json` a test package with a placeholder identity is built; it can't be uploaded.
+Tile images are generated from the brand icon with `npm run store-assets -w @otto/desktop`.
+The Store version skips Otto's own update check: the Store updates it.

@@ -73,7 +73,8 @@ async function check(getWindow: () => BrowserWindow | null): Promise<void> {
 }
 
 export function startUpdateChecks(getWindow: () => BrowserWindow | null): void {
-  if (process.env.OTTO_UPDATE_CHECK === '0') return;
+  // the Store build is updated by the Store itself
+  if (process.env.OTTO_UPDATE_CHECK === '0' || process.windowsStore) return;
   setTimeout(() => void check(getWindow), 15_000); // let the app finish starting first
   setInterval(() => void check(getWindow), DAY).unref?.();
 }

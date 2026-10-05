@@ -17,7 +17,9 @@
     "dist:local": "npm run build && npm run build:renderer && node scripts/dist-local.mjs",
     "icon": "node scripts/make-icon.mjs",
     "test": "npm run build && node --test \"dist/server/__tests__/*.test.js\"",
-    "installer-assets": "node scripts/make-installer-assets.mjs"
+    "installer-assets": "node scripts/make-installer-assets.mjs",
+    "dist:store": "npm run build && npm run build:renderer && node scripts/dist-store.mjs",
+    "store-assets": "node scripts/make-store-assets.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.11.17",
@@ -73,7 +75,22 @@
       "runAfterFinish": true
     },
     "electronVersion": "31.7.7",
-    "npmRebuild": false
+    "npmRebuild": false,
+    "appx": {
+      "applicationId": "ZeithubOtto",
+      "displayName": "zeithub.otto",
+      "backgroundColor": "#070909",
+      "showNameOnTiles": false,
+      "languages": [
+        "ru-RU",
+        "en-US",
+        "az-Latn-AZ",
+        "ka-GE",
+        "it-IT",
+        "es-ES"
+      ],
+      "artifactName": "zeithub-otto-${version}.${ext}"
+    }
   },
   "dependencies": {
     "dotenv": "^18.0.4",
