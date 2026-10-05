@@ -30,7 +30,7 @@
     "check:i18n": "npm run check:i18n --workspaces --if-present",
     "check:alpha": "npm run check:alpha --workspaces --if-present",
     "pack:win": "npm run pack:win -w @otto/desktop",
-    "release": "bash scripts/release.sh"
+    "release": "node scripts/release.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

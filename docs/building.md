@@ -66,11 +66,11 @@ The Store version skips Otto's own update check: the Store updates it.
 ## One-command release
 
 ```bash
-scripts/release.sh 0.1.9 --store --publish
+npm run release -- 0.1.9 --store --publish
 ```
 
 Add the version's entry to `apps/web/lib/changelog.ts` first: it becomes the GitHub release notes
 and the "What's new" list in the app. The script bumps the three `package.json` versions, runs the
 tests, builds the installer (and with `--store` the `.appx` for Partner Center). With `--publish` it
 commits the version bump, tags, pushes to `main` and creates the GitHub release. Without `--publish`
-nothing leaves your machine. Commit your feature changes before running it.
+nothing leaves your machine. Commit your feature changes before running it. To publish a version that is already bumped and built: `npm run release -- 0.1.8 --publish --no-bump`. Works from PowerShell, cmd and Git Bash.
