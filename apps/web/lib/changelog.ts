@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.8',
+    date: '2026-10-05',
+    items: [
+      'Connectors: Figma, Miro, Jira, Linear, Asana, Trello, Notion, Confluence, Slack, GitHub, GitLab, Sentry, Supabase and any MCP server, by access token',
+      'Every model and agent can use connected services; changes in them ask first (Settings → Permissions)',
+      'Microsoft Store package (MSIX) build',
+    ],
+  },
+  {
     version: '0.1.7',
     date: '2026-10-05',
     items: [

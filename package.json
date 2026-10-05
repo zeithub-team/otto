@@ -1,6 +1,6 @@
 {
   "name": "zeithub-otto",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "description": "zeithub.otto — local AI coding studio (Ollama, desktop + web)",
   "author": "zeithub.team",
