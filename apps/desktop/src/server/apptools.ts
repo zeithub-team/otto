@@ -97,7 +97,7 @@ function keyIdOf(ref: string): string | undefined {
 }
 
 /** `ctx` is null only when the schemas are listed. */
-export function appTools(ctx: AppToolContext | null, approve?: (kind: 'shell' | 'ssh', text: string, always?: boolean) => Promise<string | null>): AgentTool[] {
+export function appTools(ctx: AppToolContext | null, approve?: (kind: 'shell' | 'ssh' | 'connector', text: string, always?: boolean) => Promise<string | null>): AgentTool[] {
   return [
     {
       name: 'otto_about',

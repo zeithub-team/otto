@@ -600,7 +600,7 @@ function fallbackKey(dataDir: string): Buffer {
   }
 }
 
-function seal(dataDir: string, text: string): string {
+export function seal(dataDir: string, text: string): string {
   const os_ = osStore();
   if (os_) return 'os:' + os_.encryptString(text).toString('base64');
   const iv = randomBytes(12);
@@ -609,7 +609,7 @@ function seal(dataDir: string, text: string): string {
   return 'aes:' + Buffer.concat([iv, c.getAuthTag(), enc]).toString('base64');
 }
 
-function unseal(dataDir: string, stored: string): string | null {
+export function unseal(dataDir: string, stored: string): string | null {
   try {
     if (stored.startsWith('os:')) return osStore()?.decryptString(Buffer.from(stored.slice(3), 'base64')) ?? null;
     const raw = Buffer.from(stored.slice(4), 'base64');

@@ -12,6 +12,7 @@ import { live } from './appconfig';
 import { refreshProcessPath } from './env';
 import { languageRule, notice } from './language';
 import { asFunctionTool, openBridge, sshTools, type AgentTool, type Approve } from './agentbridge';
+import { connectorTools, connectorsNote } from './connectors';
 import { appTools, localServerUrl, OTTO_GUIDE, routeAppCommand, wantsPreview, type AppToolContext } from './apptools';
 import { guidedSchema, guidedSystemPrompt, parseGuided, pickGuidedTools, toGuidedMessages, type ToolSpec } from './guided';
 import { inspectPage } from './visualqa';
@@ -938,8 +939,12 @@ async function callOttoDocker(projectId: number | null, action: OttoDockerAction
 }
 
 /** How a tool call that changes something is cleared: 'run', 'ask' the user, or a refusal for the agent. */
-function gate(kind: 'shell' | 'ssh', interactive: boolean, always = false): string {
-  if (always) { /* the user decides every time */ } else if (kind === 'ssh') {
+function gate(kind: 'shell' | 'ssh' | 'connector', interactive: boolean, always = false): string {
+  if (always) { /* the user decides every time */ } else if (kind === 'connector') {
+    const mode = String(live<string>('permissions.connectors') ?? 'ask');
+    if (mode === 'off') return 'Changes in connected services are turned off (Settings → Permissions → Connected services). Tell the user what to do there.';
+    if (mode === 'allow') return 'run';
+  } else if (kind === 'ssh') {
     const mode = String(live<string>('permissions.ssh') ?? 'ask');
     if (mode === 'off') return 'SSH changes are turned off (Settings → Permissions → SSH changes). Tell the user what to run on the server.';
     if (mode === 'allow') return 'run';
@@ -1008,6 +1013,7 @@ function bridgeTools(root: string, pid: number | null, showUrl?: (url: string) =
       },
     },
     ...sshTools,
+    ...connectorTools(),
   ];
 }
 
@@ -1236,6 +1242,7 @@ function workspaceTools(webEnabled = true): unknown[] {
       { name: { type: 'string', description: 'Skill name' }, path: { type: 'string', description: 'File path inside the skill folder' } },
     ),
     ...sshTools.map(asFunctionTool),
+    ...connectorTools().map(asFunctionTool),
     ...appTools(null).map(asFunctionTool),
   ].filter((spec) => {
     // Web tools are offered only while the composer's Web toggle is on
@@ -1712,6 +1719,7 @@ export async function* generateResponse(
         skillsPrompt(enabledSkills(root, profileKey(options.projectId, options.model)), prompt, false),
         edits ? '' : 'Read-only session: do not change files; explain what to change instead.',
         codexBridge.url ? OTTO_GUIDE + '\nThese tools are on the MCP server "otto". For Docker services, servers and the Preview use them rather than your own shell.' : '',
+        codexBridge.url && connectorsNote() ? `${connectorsNote()} connector_tools and connector_call are on the MCP server "otto".` : '',
       ].filter(Boolean).join('\n'),
     });
     codexRun = run;
@@ -1856,6 +1864,7 @@ export async function* generateResponse(
         options.extraSystem ?? '',
         skillsPrompt(enabledSkills(root, profileKey(options.projectId, options.model)), prompt, false),
         bridge.url ? OTTO_GUIDE.replace(/\b(otto_\w+|ssh_\w+|run_command)\b/g, 'mcp__otto__$1') : '',
+        bridge.url && connectorsNote() ? connectorsNote().replace(/\b(connector_tools|connector_call)\b/g, 'mcp__otto__$1') : '',
         bridge.url
           ? 'For shell commands, the project\'s Docker services (databases such as PostgreSQL, Redis…) and servers use the Otto tools: mcp__otto__run_command, mcp__otto__otto_docker, mcp__otto__ssh_sessions / ssh_exec / ssh_list / ssh_read_file / ssh_write_file. The user approves changes in Otto; if one is declined, do not retry it.'
           : edits && !shellAuto ? 'Shell commands are disabled in this session: when one is needed, give the user the exact command to run.' : '',
@@ -2102,6 +2111,7 @@ ${webRules}Порядок работы:
   systemContent += '\n\n' + languageRule(options.prompt, earlierUserMessages);
   if (toolsEnabled) systemContent += skillsPrompt(enabledSkills(root, profileKey(options.projectId, options.model)), options.prompt);
   if (toolsEnabled) systemContent += '\n\n' + OTTO_GUIDE;
+  if (toolsEnabled && connectorsNote()) systemContent += '\n\n' + connectorsNote();
   if (options.extraSystem) systemContent +='\n\n' + options.extraSystem;
   const messages: Message[] = [
     { role: 'system', content: systemContent },
@@ -2139,7 +2149,7 @@ ${webRules}Порядок работы:
     const tree = treeAt >= 0 ? head.slice(treeAt) : '';
     // (a big design kit in the prompt made small models forget the task; Otto styles bare pages itself instead)
     const kit = '';
-    messages[0].content = guidedSystemPrompt(specs, [kit, languageRule(options.prompt, earlierUserMessages), options.extraSystem ?? '', tree].filter(Boolean).join('\n\n'));
+    messages[0].content = guidedSystemPrompt(specs, [kit, languageRule(options.prompt, earlierUserMessages), connectorsNote(), options.extraSystem ?? '', tree].filter(Boolean).join('\n\n'));
   }
 
   // Planner + coder (planner.ts): a light "architect" model plans the work, the chat's model only builds it.
@@ -2595,7 +2605,7 @@ ${webRules}Порядок работы:
         const actId = `act-${msgId}-${step}-${i}`;
         if (name !== 'run_command') yield activity('tool_start', name, paths, actId);
         let result: string;
-        const extTool = sshTools.find((t) => t.name === name) ?? appTools(null).find((t) => t.name === name);
+        const extTool = sshTools.find((t) => t.name === name) ?? connectorTools().find((t) => t.name === name) ?? appTools(null).find((t) => t.name === name);
         if (extTool) {
           // approval cards are streamed while the tool works (ssh_connect may ask twice: connect, then the host key)
           const cards: string[] = [];
@@ -2615,7 +2625,7 @@ ${webRules}Порядок работы:
             return ok ? null : DECLINED;
           };
           const ctx: AppToolContext = { root, projectId: Number(pid) || null, emitUi: options.onUi ? (act) => { options.onUi!(act); return true; } : null };
-          const tool = sshTools.find((t) => t.name === name) ?? appTools(ctx, approveHere).find((t) => t.name === name)!;
+          const tool = sshTools.find((t) => t.name === name) ?? connectorTools().find((t) => t.name === name) ?? appTools(ctx, approveHere).find((t) => t.name === name)!;
           let finished = false;
           const job = (async () => {
             const need = tool.approval(argsObj);

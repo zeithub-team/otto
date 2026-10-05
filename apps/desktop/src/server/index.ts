@@ -11,6 +11,7 @@
  * (`node dist/server/index.js`, see the `server` npm script).
  */
 import { configureAppTools } from './apptools';
+import { configureConnectors, stopAllConnectors } from './connectors';
 import { handleBridge } from './agentbridge';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -217,6 +218,7 @@ export async function startServer(opts: StartServerOptions = {}): Promise<Runnin
   configureSkills({ getSetting: (key) => db.getSetting(key), userDir: path.dirname(dbPath) });
   configureCodex({ dataDir: path.dirname(dbPath) });
   configureAppTools({ dataDir: path.dirname(dbPath) });
+  configureConnectors({ dataDir: path.dirname(dbPath) });
   migrateLegacyOpencodeKey(db);
   const deps = createDeps(db, usableRoot, path.dirname(dbPath));
   const permissionClients = new Set<(item: { id: string; kind: string; action: string; target?: string }) => void>();
@@ -292,6 +294,7 @@ export async function startServer(opts: StartServerOptions = {}): Promise<Runnin
     port,
     close: () =>
       new Promise<void>((resolve) => {
+        void stopAllConnectors(); // the npx servers are child processes
         if (process.env.OTTO_INTERNAL_API_URL === `http://127.0.0.1:${port}`) {
           if (previousInternalApiUrl === undefined) delete process.env.OTTO_INTERNAL_API_URL;
           else process.env.OTTO_INTERNAL_API_URL = previousInternalApiUrl;

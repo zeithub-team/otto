@@ -23,12 +23,12 @@ export interface AgentTool {
    * What the user approves, or null for a read-only call. kind decides which setting applies:
    * shell → Agent → terminal commands, ssh → Permissions → SSH changes.
    */
-  approval: (args: Record<string, unknown>) => { kind: 'shell' | 'ssh'; text: string; always?: boolean } | null;
+  approval: (args: Record<string, unknown>) => { kind: 'shell' | 'ssh' | 'connector'; text: string; always?: boolean } | null;
   run: (args: Record<string, unknown>) => Promise<string>;
 }
 
 /** Answer for the agent when it is not allowed, or null to go ahead. */
-export type Approve = (kind: 'shell' | 'ssh', text: string, always?: boolean) => Promise<string | null>;
+export type Approve = (kind: 'shell' | 'ssh' | 'connector', text: string, always?: boolean) => Promise<string | null>;
 
 // ------------------------------------------------------------------ ssh tools --
 

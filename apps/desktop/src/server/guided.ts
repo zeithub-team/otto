@@ -23,6 +23,8 @@ const GROUPS: Record<string, string[]> = {
   read: ['list_files', 'read_file', 'search_files'],
   // only offered while the chat's Web switch is on (the tool list itself is filtered by it)
   web: ['web_search', 'fetch_url'],
+  // only offered while a service is connected (Connectors)
+  connectors: ['connector_tools', 'connector_call'],
 };
 
 const KINDS: Array<[string, RegExp]> = [
@@ -32,6 +34,7 @@ const KINDS: Array<[string, RegExp]> = [
   ['ssh', /(\bssh\b|sftp|подключись к сервер|connect to (the )?server|\b\d{1,3}(\.\d{1,3}){3}\b)/i],
   ['run', /(запуст|подними|подним|\bstart\b|\brun\b|serve|превью|preview|покажи|показать|открой в браузер|dev[- ]?сервер|dev server|işə sal)/i],
   ['code', /(файл|file|код|code|html|css|\bjs\b|javascript|typescript|php|python|страниц|page|лендинг|landing|функци|function|компонент|component|исправ|почини|fix|замени|replace|измени|change|добав|add|создай|create|сгенерир|generate|напиши|write|верст|стил|style|удали|delete|remove|fayl)/i],
+  ['connectors', /(figma|miro|jira|linear|asana|trello|notion|confluence|slack|github|gitlab|sentry|supabase|коннектор|connector|подключени[ея] (к )?сервис|issue|тикет|ticket|макет|дизайн|design|доск[уаеи]|board|пулл?.?реквест|pull request|\bpr\b|merge request)/i],
   ['web', /(интернет|в сети|поищи|найди в|загугли|погугли|гугл|search the web|web search|search online|online|google|актуальн|свеж|последн\w* верси|latest|новост|news|документаци|\bdocs?\b|курс (валют|доллар|евро)|погод|https?:\/\/|www\.)/i],
 ];
 
@@ -45,7 +48,7 @@ export function pickGuidedTools(prompt: string, available: string[]): string[] {
   // "what is Docker?" mentions a service but asks for nothing to be done: read-only tools
   const asksForWork = /(созда|напиш|запуст|подним|останов|исправ|почин|добав|удал|замени|поменя|смени|открой|покажи|сгенер|сделай|установ|подключ|create|write|run\b|start|stop|fix|add|delete|replace|change|open|show|generate|install|connect)/i.test(prompt);
   // (a web lookup stays: "what is the latest Laravel version?" needs it)
-  if (isQuestion && !asksForWork) kinds.splice(0, kinds.length, ...kinds.filter((k) => k === 'web'));
+  if (isQuestion && !asksForWork) kinds.splice(0, kinds.length, ...kinds.filter((k) => k === 'web' || k === 'connectors'));
   if (!kinds.length) kinds.push(...(isQuestion ? ['read'] : ['code', 'run']));
   const names = new Set<string>();
   for (const k of kinds) for (const n of GROUPS[k]) names.add(n);
@@ -76,6 +79,8 @@ const SHORT: Record<string, string> = {
   ssh_connect: 'connect to a server over SSH. args: {host, user, password?, key?, port?}',
   ssh_sessions: 'list open SSH connections. args: {}',
   ssh_exec: 'run a command on a connected server. args: {session?, command}',
+  connector_tools: 'list what a connected service (Figma, GitHub, Jira, Notion…) can do. args: {connector}',
+  connector_call: 'call a tool of a connected service. args: {connector, tool, arguments: {…}}',
   ssh_list: 'list a folder on the server. args: {session?, path}',
   ssh_read_file: 'read a file on the server. args: {session?, path}',
   ssh_write_file: 'write a file on the server. args: {session?, path, content}',

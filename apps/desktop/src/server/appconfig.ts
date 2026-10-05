@@ -48,6 +48,7 @@ export const SETTINGS: SettingDef[] = [
   { key: 'terminal.shell', page: 'terminal', kind: 'select', default: 'auto', options: ['auto', 'powershell', 'pwsh', 'cmd', 'bash', 'zsh', 'tabby'] },
   { key: 'permissions.terminal', page: 'permissions', kind: 'select', default: 'ask', options: ['ask', 'allow'] },
   { key: 'permissions.ssh', page: 'permissions', kind: 'select', default: 'ask', options: ['ask', 'allow', 'off'] },
+  { key: 'permissions.connectors', page: 'permissions', kind: 'select', default: 'ask', options: ['ask', 'allow', 'off'] },
   { key: 'server.port', page: 'server', kind: 'number', default: DEFAULT_PORT, min: 1024, max: 65535, restart: true },
 ];
 

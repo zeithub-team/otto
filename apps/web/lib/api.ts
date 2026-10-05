@@ -1409,3 +1409,27 @@ export async function testOllamaUrl(url: string): Promise<{ ok: boolean; models?
     return { ok: false, error: exc instanceof Error ? exc.message : String(exc) };
   }
 }
+
+// ------------------------------------------------------------------ connectors --
+
+export interface ConnectorField { key: string; label: string; secret?: boolean; optional?: boolean; placeholder?: string; set: boolean; value?: string }
+export interface ConnectorInfo {
+  id: string; name: string; group: 'design' | 'tasks' | 'docs' | 'dev' | 'custom'; description: string; tokenUrl: string;
+  fields: ConnectorField[]; connected: boolean; tools: number; error?: string;
+}
+
+async function connectorPost<T>(action: string, body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(`${API_BASE}/api/connectors/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(String((data as { detail?: unknown }).detail ?? `HTTP ${res.status}`));
+  return data as T;
+}
+
+export async function fetchConnectors(): Promise<ConnectorInfo[]> {
+  const res = await fetch(`${API_BASE}/api/connectors`);
+  if (!res.ok) return [];
+  return ((await res.json()) as { connectors: ConnectorInfo[] }).connectors;
+}
+export const saveConnector = (id: string, values: Record<string, string>) => connectorPost<ConnectorInfo>('save', { id, values });
+export const testConnector = (id: string) => connectorPost<{ tools: number; error?: string }>('test', { id });
+export const removeConnector = (id: string) => connectorPost<{ removed: boolean }>('remove', { id });

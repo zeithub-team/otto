@@ -23,6 +23,7 @@ import { listBackground, resolveApproval } from './shell';
 import { DBX_ROUTES, handleDbxRoute } from './dbxroutes';
 import { detectProjectDatabases } from './dbdetect';
 import { SSH_ROUTES, handleSshRoute } from './sshroutes';
+import { listConnectors, removeConnector, saveConnector, testConnector } from './connectors';
 import { listSchema, runQuery, tableRows, type DbConn } from './dbclient';
 import { checkoutBranch, cloneRepo, listBranches, listOwners, listRepos, validateToken } from './git';
 import { projectNav } from './nav';
@@ -208,6 +209,10 @@ const ROUTES: RouteSpec[] = [
   { path: '/api/services/docker', methods: ['POST'] },
   { path: '/api/services/summary', methods: ['GET'] },
   { path: '/api/connectors/tabby/open', methods: ['POST'] },
+  { path: '/api/connectors', methods: ['GET'] },
+  { path: '/api/connectors/save', methods: ['POST'] },
+  { path: '/api/connectors/test', methods: ['POST'] },
+  { path: '/api/connectors/remove', methods: ['POST'] },
   { path: '/api/terminal/start', methods: ['POST'] },
   { path: '/api/terminal/stop', methods: ['POST'] },
   { path: '/api/terminal/list', methods: ['GET'] },
@@ -1253,6 +1258,22 @@ export async function handleApi(
       return true;
     }
 
+    if (pathname === '/api/connectors' && method === 'GET') {
+      sendJson(res, 200, { connectors: listConnectors() });
+      return true;
+    }
+    if ((pathname === '/api/connectors/save' || pathname === '/api/connectors/test' || pathname === '/api/connectors/remove') && method === 'POST') {
+      const body = (await readJsonBody(req)) as Record<string, unknown>;
+      const id = typeof body.id === 'string' ? body.id : '';
+      try {
+        if (pathname.endsWith('/save')) sendJson(res, 200, await saveConnector(id, (body.values ?? {}) as Record<string, unknown>));
+        else if (pathname.endsWith('/test')) sendJson(res, 200, await testConnector(id));
+        else { await removeConnector(id); sendJson(res, 200, { removed: true }); }
+      } catch (exc) {
+        throw new HttpError(400, exc instanceof Error ? exc.message : String(exc));
+      }
+      return true;
+    }
     if (pathname === '/api/connectors/tabby/open') {
       if (method !== 'POST') return false;
       const body = await readJsonBody(req);
