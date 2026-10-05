@@ -1,0 +1,46 @@
+name: Build Windows installer
+
+# Builds the NSIS installer on a clean Windows runner.
+# Why not locally: Smart App Control on a developer PC can block the temporary
+# unsigned uninstaller stub that electron-builder runs while building NSIS
+# ("spawn UNKNOWN"). A CI runner has no such policy.
+#
+# Run it from the Actions tab ("Run workflow") or by pushing a tag like v0.1.0.
+# Code signing (Azure Artifact Signing or an OV/EV certificate) can be added
+# here later through repository secrets; see README → "Подпись кода".
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check (types, lint, i18n, tests)
+        run: npm run check
+
+      - name: Build installer
+        run: npm run dist:win
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: zeithub-otto-setup
+          path: apps/desktop/release/v*/zeithub-otto-setup-*.exe
+          if-no-files-found: error

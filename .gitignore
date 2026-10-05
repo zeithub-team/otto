@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+apps/web/out/
+apps/desktop/dist/
+apps/desktop/renderer/
+apps/desktop/release/
+apps/desktop/assets/.icon-build/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local state — never commit
+.env
+.env.*
+!.env.example
+data/
+workspace/
+*.log
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local compose of the user
+otto.compose.yaml

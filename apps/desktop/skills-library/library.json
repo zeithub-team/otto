@@ -1,0 +1,2130 @@
+{
+ "anthropic.discord.access": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "discord",
+  "skill": "access",
+  "category": "workflow"
+ },
+ "anthropic.discord.configure": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "discord",
+  "skill": "configure",
+  "category": "workflow"
+ },
+ "anthropic.imessage.access": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "imessage",
+  "skill": "access",
+  "category": "workflow"
+ },
+ "anthropic.imessage.configure": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "imessage",
+  "skill": "configure",
+  "category": "workflow"
+ },
+ "anthropic.telegram.access": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "telegram",
+  "skill": "access",
+  "category": "workflow"
+ },
+ "anthropic.telegram.configure": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "telegram",
+  "skill": "configure",
+  "category": "workflow"
+ },
+ "anthropic.claude-code-setup.claude-automation-recommender": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "claude-code-setup",
+  "skill": "claude-automation-recommender",
+  "category": "workflow"
+ },
+ "anthropic.claude-md-management.claude-md-improver": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "claude-md-management",
+  "skill": "claude-md-improver",
+  "category": "workflow"
+ },
+ "anthropic.cwc-makers.cardputer-buddy": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "cwc-makers",
+  "skill": "cardputer-buddy",
+  "category": "other"
+ },
+ "anthropic.cwc-makers.m5-onboard": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "cwc-makers",
+  "skill": "m5-onboard",
+  "category": "other"
+ },
+ "anthropic.frontend-design.frontend-design": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "frontend-design",
+  "skill": "frontend-design",
+  "category": "design"
+ },
+ "anthropic.hookify.writing-rules": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "hookify",
+  "skill": "writing-rules",
+  "category": "code"
+ },
+ "anthropic.math-olympiad.math-olympiad": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "math-olympiad",
+  "skill": "math-olympiad",
+  "category": "learning"
+ },
+ "anthropic.math-proof.siege": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "math-proof",
+  "skill": "siege",
+  "category": "learning"
+ },
+ "anthropic.math-proof.solo": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "math-proof",
+  "skill": "solo",
+  "category": "learning"
+ },
+ "anthropic.mcp-server-dev.build-mcp-app": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "mcp-server-dev",
+  "skill": "build-mcp-app",
+  "category": "code"
+ },
+ "anthropic.mcp-server-dev.build-mcp-server": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "mcp-server-dev",
+  "skill": "build-mcp-server",
+  "category": "code"
+ },
+ "anthropic.mcp-server-dev.build-mcpb": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "mcp-server-dev",
+  "skill": "build-mcpb",
+  "category": "code"
+ },
+ "anthropic.playground.playground": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "playground",
+  "skill": "playground",
+  "category": "design"
+ },
+ "anthropic.plugin-dev.agent-development": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "plugin-dev",
+  "skill": "agent-development",
+  "category": "code"
+ },
+ "anthropic.plugin-dev.command-development": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "plugin-dev",
+  "skill": "command-development",
+  "category": "code"
+ },
+ "anthropic.plugin-dev.hook-development": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "plugin-dev",
+  "skill": "hook-development",
+  "category": "code"
+ },
+ "anthropic.plugin-dev.mcp-integration": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "plugin-dev",
+  "skill": "mcp-integration",
+  "category": "code"
+ },
+ "anthropic.plugin-dev.plugin-settings": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "plugin-dev",
+  "skill": "plugin-settings",
+  "category": "code"
+ },
+ "anthropic.plugin-dev.plugin-structure": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "plugin-dev",
+  "skill": "plugin-structure",
+  "category": "code"
+ },
+ "anthropic.plugin-dev.skill-development": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "plugin-dev",
+  "skill": "skill-development",
+  "category": "code"
+ },
+ "anthropic.project-artifact.project-artifact": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "project-artifact",
+  "skill": "project-artifact",
+  "category": "design"
+ },
+ "anthropic.receipts.receipts": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "receipts",
+  "skill": "receipts",
+  "category": "business"
+ },
+ "anthropic.session-report.session-report": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "session-report",
+  "skill": "session-report",
+  "category": "workflow"
+ },
+ "anthropic.skill-creator.skill-creator": {
+  "vendor": "anthropic",
+  "repo": "anthropics/claude-plugins-official",
+  "plugin": "skill-creator",
+  "skill": "skill-creator",
+  "category": "workflow"
+ },
+ "anthropic.bio-research.instrument-data-to-allotrope": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "bio-research",
+  "skill": "instrument-data-to-allotrope",
+  "category": "data"
+ },
+ "anthropic.bio-research.nextflow-development": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "bio-research",
+  "skill": "nextflow-development",
+  "category": "data"
+ },
+ "anthropic.bio-research.scientific-problem-selection": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "bio-research",
+  "skill": "scientific-problem-selection",
+  "category": "data"
+ },
+ "anthropic.bio-research.scvi-tools": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "bio-research",
+  "skill": "scvi-tools",
+  "category": "data"
+ },
+ "anthropic.bio-research.single-cell-rna-qc": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "bio-research",
+  "skill": "single-cell-rna-qc",
+  "category": "data"
+ },
+ "anthropic.bio-research.start": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "bio-research",
+  "skill": "start",
+  "category": "data"
+ },
+ "anthropic.cowork-plugin-management.cowork-plugin-customizer": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "cowork-plugin-management",
+  "skill": "cowork-plugin-customizer",
+  "category": "workflow"
+ },
+ "anthropic.cowork-plugin-management.create-cowork-plugin": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "cowork-plugin-management",
+  "skill": "create-cowork-plugin",
+  "category": "workflow"
+ },
+ "anthropic.customer-support.customer-escalation": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "customer-support",
+  "skill": "customer-escalation",
+  "category": "business"
+ },
+ "anthropic.customer-support.customer-research": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "customer-support",
+  "skill": "customer-research",
+  "category": "business"
+ },
+ "anthropic.customer-support.draft-response": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "customer-support",
+  "skill": "draft-response",
+  "category": "business"
+ },
+ "anthropic.customer-support.kb-article": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "customer-support",
+  "skill": "kb-article",
+  "category": "business"
+ },
+ "anthropic.customer-support.ticket-triage": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "customer-support",
+  "skill": "ticket-triage",
+  "category": "business"
+ },
+ "anthropic.data.analyze": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "data",
+  "skill": "analyze",
+  "category": "data"
+ },
+ "anthropic.data.build-dashboard": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "data",
+  "skill": "build-dashboard",
+  "category": "data"
+ },
+ "anthropic.data.create-viz": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "data",
+  "skill": "create-viz",
+  "category": "data"
+ },
+ "anthropic.data.data-context-extractor": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "data",
+  "skill": "data-context-extractor",
+  "category": "data"
+ },
+ "anthropic.data.data-visualization": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "data",
+  "skill": "data-visualization",
+  "category": "data"
+ },
+ "anthropic.data.explore-data": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "data",
+  "skill": "explore-data",
+  "category": "data"
+ },
+ "anthropic.data.sql-queries": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "data",
+  "skill": "sql-queries",
+  "category": "data"
+ },
+ "anthropic.data.statistical-analysis": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "data",
+  "skill": "statistical-analysis",
+  "category": "data"
+ },
+ "anthropic.data.validate-data": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "data",
+  "skill": "validate-data",
+  "category": "data"
+ },
+ "anthropic.data.write-query": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "data",
+  "skill": "write-query",
+  "category": "data"
+ },
+ "anthropic.design.accessibility-review": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "design",
+  "skill": "accessibility-review",
+  "category": "design"
+ },
+ "anthropic.design.design-critique": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "design",
+  "skill": "design-critique",
+  "category": "design"
+ },
+ "anthropic.design.design-handoff": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "design",
+  "skill": "design-handoff",
+  "category": "design"
+ },
+ "anthropic.design.design-system": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "design",
+  "skill": "design-system",
+  "category": "design"
+ },
+ "anthropic.design.research-synthesis": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "design",
+  "skill": "research-synthesis",
+  "category": "design"
+ },
+ "anthropic.design.user-research": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "design",
+  "skill": "user-research",
+  "category": "design"
+ },
+ "anthropic.design.ux-copy": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "design",
+  "skill": "ux-copy",
+  "category": "design"
+ },
+ "anthropic.engineering.architecture": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "engineering",
+  "skill": "architecture",
+  "category": "code"
+ },
+ "anthropic.engineering.code-review": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "engineering",
+  "skill": "code-review",
+  "category": "code"
+ },
+ "anthropic.engineering.debug": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "engineering",
+  "skill": "debug",
+  "category": "code"
+ },
+ "anthropic.engineering.deploy-checklist": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "engineering",
+  "skill": "deploy-checklist",
+  "category": "code"
+ },
+ "anthropic.engineering.documentation": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "engineering",
+  "skill": "documentation",
+  "category": "code"
+ },
+ "anthropic.engineering.incident-response": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "engineering",
+  "skill": "incident-response",
+  "category": "code"
+ },
+ "anthropic.engineering.standup": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "engineering",
+  "skill": "standup",
+  "category": "code"
+ },
+ "anthropic.engineering.system-design": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "engineering",
+  "skill": "system-design",
+  "category": "code"
+ },
+ "anthropic.engineering.tech-debt": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "engineering",
+  "skill": "tech-debt",
+  "category": "code"
+ },
+ "anthropic.engineering.testing-strategy": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "engineering",
+  "skill": "testing-strategy",
+  "category": "code"
+ },
+ "anthropic.enterprise-search.digest": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "enterprise-search",
+  "skill": "digest",
+  "category": "productivity"
+ },
+ "anthropic.enterprise-search.knowledge-synthesis": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "enterprise-search",
+  "skill": "knowledge-synthesis",
+  "category": "productivity"
+ },
+ "anthropic.enterprise-search.search": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "enterprise-search",
+  "skill": "search",
+  "category": "productivity"
+ },
+ "anthropic.enterprise-search.search-strategy": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "enterprise-search",
+  "skill": "search-strategy",
+  "category": "productivity"
+ },
+ "anthropic.enterprise-search.source-management": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "enterprise-search",
+  "skill": "source-management",
+  "category": "productivity"
+ },
+ "anthropic.finance.audit-support": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "finance",
+  "skill": "audit-support",
+  "category": "business"
+ },
+ "anthropic.finance.close-management": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "finance",
+  "skill": "close-management",
+  "category": "business"
+ },
+ "anthropic.finance.financial-statements": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "finance",
+  "skill": "financial-statements",
+  "category": "business"
+ },
+ "anthropic.finance.journal-entry": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "finance",
+  "skill": "journal-entry",
+  "category": "business"
+ },
+ "anthropic.finance.journal-entry-prep": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "finance",
+  "skill": "journal-entry-prep",
+  "category": "business"
+ },
+ "anthropic.finance.reconciliation": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "finance",
+  "skill": "reconciliation",
+  "category": "business"
+ },
+ "anthropic.finance.sox-testing": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "finance",
+  "skill": "sox-testing",
+  "category": "business"
+ },
+ "anthropic.finance.variance-analysis": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "finance",
+  "skill": "variance-analysis",
+  "category": "business"
+ },
+ "anthropic.human-resources.comp-analysis": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "human-resources",
+  "skill": "comp-analysis",
+  "category": "business"
+ },
+ "anthropic.human-resources.draft-offer": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "human-resources",
+  "skill": "draft-offer",
+  "category": "business"
+ },
+ "anthropic.human-resources.interview-prep": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "human-resources",
+  "skill": "interview-prep",
+  "category": "business"
+ },
+ "anthropic.human-resources.onboarding": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "human-resources",
+  "skill": "onboarding",
+  "category": "business"
+ },
+ "anthropic.human-resources.org-planning": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "human-resources",
+  "skill": "org-planning",
+  "category": "business"
+ },
+ "anthropic.human-resources.people-report": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "human-resources",
+  "skill": "people-report",
+  "category": "business"
+ },
+ "anthropic.human-resources.performance-review": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "human-resources",
+  "skill": "performance-review",
+  "category": "business"
+ },
+ "anthropic.human-resources.policy-lookup": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "human-resources",
+  "skill": "policy-lookup",
+  "category": "business"
+ },
+ "anthropic.human-resources.recruiting-pipeline": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "human-resources",
+  "skill": "recruiting-pipeline",
+  "category": "business"
+ },
+ "anthropic.legal.brief": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "legal",
+  "skill": "brief",
+  "category": "business"
+ },
+ "anthropic.legal.compliance-check": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "legal",
+  "skill": "compliance-check",
+  "category": "business"
+ },
+ "anthropic.legal.legal-response": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "legal",
+  "skill": "legal-response",
+  "category": "business"
+ },
+ "anthropic.legal.legal-risk-assessment": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "legal",
+  "skill": "legal-risk-assessment",
+  "category": "business"
+ },
+ "anthropic.legal.meeting-briefing": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "legal",
+  "skill": "meeting-briefing",
+  "category": "business"
+ },
+ "anthropic.legal.review-contract": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "legal",
+  "skill": "review-contract",
+  "category": "business"
+ },
+ "anthropic.legal.signature-request": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "legal",
+  "skill": "signature-request",
+  "category": "business"
+ },
+ "anthropic.legal.triage-nda": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "legal",
+  "skill": "triage-nda",
+  "category": "business"
+ },
+ "anthropic.legal.vendor-check": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "legal",
+  "skill": "vendor-check",
+  "category": "business"
+ },
+ "anthropic.marketing.brand-review": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "marketing",
+  "skill": "brand-review",
+  "category": "business"
+ },
+ "anthropic.marketing.campaign-plan": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "marketing",
+  "skill": "campaign-plan",
+  "category": "business"
+ },
+ "anthropic.marketing.competitive-brief": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "marketing",
+  "skill": "competitive-brief",
+  "category": "business"
+ },
+ "anthropic.marketing.content-creation": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "marketing",
+  "skill": "content-creation",
+  "category": "business"
+ },
+ "anthropic.marketing.draft-content": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "marketing",
+  "skill": "draft-content",
+  "category": "business"
+ },
+ "anthropic.marketing.email-sequence": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "marketing",
+  "skill": "email-sequence",
+  "category": "business"
+ },
+ "anthropic.marketing.performance-report": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "marketing",
+  "skill": "performance-report",
+  "category": "business"
+ },
+ "anthropic.marketing.seo-audit": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "marketing",
+  "skill": "seo-audit",
+  "category": "business"
+ },
+ "anthropic.operations.capacity-plan": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "operations",
+  "skill": "capacity-plan",
+  "category": "productivity"
+ },
+ "anthropic.operations.change-request": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "operations",
+  "skill": "change-request",
+  "category": "productivity"
+ },
+ "anthropic.operations.compliance-tracking": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "operations",
+  "skill": "compliance-tracking",
+  "category": "productivity"
+ },
+ "anthropic.operations.process-doc": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "operations",
+  "skill": "process-doc",
+  "category": "productivity"
+ },
+ "anthropic.operations.process-optimization": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "operations",
+  "skill": "process-optimization",
+  "category": "productivity"
+ },
+ "anthropic.operations.risk-assessment": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "operations",
+  "skill": "risk-assessment",
+  "category": "productivity"
+ },
+ "anthropic.operations.runbook": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "operations",
+  "skill": "runbook",
+  "category": "productivity"
+ },
+ "anthropic.operations.status-report": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "operations",
+  "skill": "status-report",
+  "category": "productivity"
+ },
+ "anthropic.operations.vendor-review": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "operations",
+  "skill": "vendor-review",
+  "category": "productivity"
+ },
+ "anthropic.apollo.enrich-lead": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "apollo",
+  "skill": "enrich-lead",
+  "category": "business"
+ },
+ "anthropic.apollo.prospect": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "apollo",
+  "skill": "prospect",
+  "category": "business"
+ },
+ "anthropic.apollo.sequence-load": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "apollo",
+  "skill": "sequence-load",
+  "category": "business"
+ },
+ "anthropic.brand-voice.brand-voice-enforcement": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "brand-voice",
+  "skill": "brand-voice-enforcement",
+  "category": "writing"
+ },
+ "anthropic.brand-voice.discover-brand": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "brand-voice",
+  "skill": "discover-brand",
+  "category": "writing"
+ },
+ "anthropic.brand-voice.guideline-generation": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "brand-voice",
+  "skill": "guideline-generation",
+  "category": "writing"
+ },
+ "anthropic.common-room.account-research": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "common-room",
+  "skill": "account-research",
+  "category": "business"
+ },
+ "anthropic.common-room.call-prep": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "common-room",
+  "skill": "call-prep",
+  "category": "business"
+ },
+ "anthropic.common-room.compose-outreach": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "common-room",
+  "skill": "compose-outreach",
+  "category": "business"
+ },
+ "anthropic.common-room.contact-research": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "common-room",
+  "skill": "contact-research",
+  "category": "business"
+ },
+ "anthropic.common-room.prospect": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "common-room",
+  "skill": "prospect",
+  "category": "business"
+ },
+ "anthropic.common-room.weekly-prep-brief": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "common-room",
+  "skill": "weekly-prep-brief",
+  "category": "business"
+ },
+ "anthropic.slack.slack-messaging": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "slack",
+  "skill": "slack-messaging",
+  "category": "productivity"
+ },
+ "anthropic.slack.slack-search": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "slack",
+  "skill": "slack-search",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.build-zoom-bot": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "build-zoom-bot",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.build-zoom-meeting-app": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "build-zoom-meeting-app",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.choose-zoom-approach": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "choose-zoom-approach",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.cobrowse-sdk": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "cobrowse-sdk",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.android": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "android",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.ios": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "ios",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.contact-center": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "contact-center",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.web": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "web",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.debug-zoom": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "debug-zoom",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.debug-zoom-integration": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "debug-zoom-integration",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.design-mcp-workflow": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "design-mcp-workflow",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.general": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "general",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.electron": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "electron",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.linux": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "linux",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.macos": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "macos",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.react-native": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "react-native",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.meeting-sdk": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "meeting-sdk",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.unreal": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "unreal",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.client-view": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "client-view",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.component-view": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "component-view",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.windows": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "windows",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.oauth": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "oauth",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.phone": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "phone",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.plan-zoom-integration": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "plan-zoom-integration",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.plan-zoom-product": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "plan-zoom-product",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.probe-sdk": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "probe-sdk",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.rest-api": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "rest-api",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.rivet-sdk": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "rivet-sdk",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.rtms": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "rtms",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.scribe": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "scribe",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.setup-zoom-mcp": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "setup-zoom-mcp",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.setup-zoom-oauth": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "setup-zoom-oauth",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.start": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "start",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.team-chat": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "team-chat",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.ui-toolkit": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "ui-toolkit",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.flutter": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "flutter",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.video-sdk": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "video-sdk",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.unity": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "unity",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.virtual-agent": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "virtual-agent",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.webhooks": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "webhooks",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.websockets": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "websockets",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.zoom-apps-sdk": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "zoom-apps-sdk",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.zoom-mcp": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "zoom-mcp",
+  "category": "productivity"
+ },
+ "anthropic.zoom-plugin.whiteboard": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "zoom-plugin",
+  "skill": "whiteboard",
+  "category": "productivity"
+ },
+ "anthropic.pdf-viewer.view-pdf": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "pdf-viewer",
+  "skill": "view-pdf",
+  "category": "writing"
+ },
+ "anthropic.product-management.competitive-brief": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "product-management",
+  "skill": "competitive-brief",
+  "category": "business"
+ },
+ "anthropic.product-management.metrics-review": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "product-management",
+  "skill": "metrics-review",
+  "category": "business"
+ },
+ "anthropic.product-management.product-brainstorming": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "product-management",
+  "skill": "product-brainstorming",
+  "category": "business"
+ },
+ "anthropic.product-management.roadmap-update": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "product-management",
+  "skill": "roadmap-update",
+  "category": "business"
+ },
+ "anthropic.product-management.sprint-planning": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "product-management",
+  "skill": "sprint-planning",
+  "category": "business"
+ },
+ "anthropic.product-management.stakeholder-update": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "product-management",
+  "skill": "stakeholder-update",
+  "category": "business"
+ },
+ "anthropic.product-management.synthesize-research": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "product-management",
+  "skill": "synthesize-research",
+  "category": "business"
+ },
+ "anthropic.product-management.write-spec": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "product-management",
+  "skill": "write-spec",
+  "category": "business"
+ },
+ "anthropic.productivity.memory-management": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "productivity",
+  "skill": "memory-management",
+  "category": "productivity"
+ },
+ "anthropic.productivity.start": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "productivity",
+  "skill": "start",
+  "category": "productivity"
+ },
+ "anthropic.productivity.task-management": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "productivity",
+  "skill": "task-management",
+  "category": "productivity"
+ },
+ "anthropic.productivity.update": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "productivity",
+  "skill": "update",
+  "category": "productivity"
+ },
+ "anthropic.sales.account-context": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "account-context",
+  "category": "business"
+ },
+ "anthropic.sales.account-plan": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "account-plan",
+  "category": "business"
+ },
+ "anthropic.sales.account-research": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "account-research",
+  "category": "business"
+ },
+ "anthropic.sales.account-tiering": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "account-tiering",
+  "category": "business"
+ },
+ "anthropic.sales.call-prep": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "call-prep",
+  "category": "business"
+ },
+ "anthropic.sales.call-summary": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "call-summary",
+  "category": "business"
+ },
+ "anthropic.sales.close-plan": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "close-plan",
+  "category": "business"
+ },
+ "anthropic.sales.competitive-intelligence": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "competitive-intelligence",
+  "category": "business"
+ },
+ "anthropic.sales.create-an-asset": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "create-an-asset",
+  "category": "business"
+ },
+ "anthropic.sales.crm-hygiene-check": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "crm-hygiene-check",
+  "category": "business"
+ },
+ "anthropic.sales.customer-health": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "customer-health",
+  "category": "business"
+ },
+ "anthropic.sales.customer-voice": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "customer-voice",
+  "category": "business"
+ },
+ "anthropic.sales.daily-briefing": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "daily-briefing",
+  "category": "business"
+ },
+ "anthropic.sales.deal-advance-gap": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "deal-advance-gap",
+  "category": "business"
+ },
+ "anthropic.sales.deal-review": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "deal-review",
+  "category": "business"
+ },
+ "anthropic.sales.deal-signals": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "deal-signals",
+  "category": "business"
+ },
+ "anthropic.sales.deal-slip-scenario": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "deal-slip-scenario",
+  "category": "business"
+ },
+ "anthropic.sales.draft-outreach": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "draft-outreach",
+  "category": "business"
+ },
+ "anthropic.sales.end-of-day": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "end-of-day",
+  "category": "business"
+ },
+ "anthropic.sales.expansion-whitespace": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "expansion-whitespace",
+  "category": "business"
+ },
+ "anthropic.sales.forecast": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "forecast",
+  "category": "business"
+ },
+ "anthropic.sales.handle-objection": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "handle-objection",
+  "category": "business"
+ },
+ "anthropic.sales.inbox-sweep": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "inbox-sweep",
+  "category": "business"
+ },
+ "anthropic.sales.lead-triage": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "lead-triage",
+  "category": "business"
+ },
+ "anthropic.sales.log-activity": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "log-activity",
+  "category": "business"
+ },
+ "anthropic.sales.pipeline-review": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "pipeline-review",
+  "category": "business"
+ },
+ "anthropic.sales.renewal-radar": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "renewal-radar",
+  "category": "business"
+ },
+ "anthropic.sales.rep-context": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "rep-context",
+  "category": "business"
+ },
+ "anthropic.sales.route-lead": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "route-lead",
+  "category": "business"
+ },
+ "anthropic.sales.schedule-meeting": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "schedule-meeting",
+  "category": "business"
+ },
+ "anthropic.sales.setup": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "setup",
+  "category": "business"
+ },
+ "anthropic.sales.stakeholder-map": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "stakeholder-map",
+  "category": "business"
+ },
+ "anthropic.sales.team-pipeline": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "team-pipeline",
+  "category": "business"
+ },
+ "anthropic.sales.update-opportunity": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "update-opportunity",
+  "category": "business"
+ },
+ "anthropic.sales.weekly-wrap": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "weekly-wrap",
+  "category": "business"
+ },
+ "anthropic.sales.win-loss-review": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "sales",
+  "skill": "win-loss-review",
+  "category": "business"
+ },
+ "anthropic.small-business.ad-manager": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "ad-manager",
+  "category": "business"
+ },
+ "anthropic.small-business.ap-processor": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "ap-processor",
+  "category": "business"
+ },
+ "anthropic.small-business.brand-style": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "brand-style",
+  "category": "business"
+ },
+ "anthropic.small-business.build-agent": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "build-agent",
+  "category": "business"
+ },
+ "anthropic.small-business.build-connector": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "build-connector",
+  "category": "business"
+ },
+ "anthropic.small-business.business-pulse": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "business-pulse",
+  "category": "business"
+ },
+ "anthropic.small-business.call-list": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "call-list",
+  "category": "business"
+ },
+ "anthropic.small-business.canva-creator": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "canva-creator",
+  "category": "business"
+ },
+ "anthropic.small-business.cash-flow-snapshot": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "cash-flow-snapshot",
+  "category": "business"
+ },
+ "anthropic.small-business.close-month": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "close-month",
+  "category": "business"
+ },
+ "anthropic.small-business.content-strategy": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "content-strategy",
+  "category": "business"
+ },
+ "anthropic.small-business.contract-review": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "contract-review",
+  "category": "business"
+ },
+ "anthropic.small-business.crm-autopilot": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "crm-autopilot",
+  "category": "business"
+ },
+ "anthropic.small-business.grant-rfp-writer": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "grant-rfp-writer",
+  "category": "business"
+ },
+ "anthropic.small-business.grow-pipeline": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "grow-pipeline",
+  "category": "business"
+ },
+ "anthropic.small-business.growth-pulse": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "growth-pulse",
+  "category": "business"
+ },
+ "anthropic.small-business.hiring-screener": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "hiring-screener",
+  "category": "business"
+ },
+ "anthropic.small-business.inbox-manager": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "inbox-manager",
+  "category": "business"
+ },
+ "anthropic.small-business.inventory-planner": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "inventory-planner",
+  "category": "business"
+ },
+ "anthropic.small-business.invoice-chase": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "invoice-chase",
+  "category": "business"
+ },
+ "anthropic.small-business.job-post-builder": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "job-post-builder",
+  "category": "business"
+ },
+ "anthropic.small-business.lead-finder": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "lead-finder",
+  "category": "business"
+ },
+ "anthropic.small-business.lead-triage": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "lead-triage",
+  "category": "business"
+ },
+ "anthropic.small-business.marketing-monday": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "marketing-monday",
+  "category": "business"
+ },
+ "anthropic.small-business.monday-brief": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "monday-brief",
+  "category": "business"
+ },
+ "anthropic.small-business.month-end-prep": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "month-end-prep",
+  "category": "business"
+ },
+ "anthropic.small-business.outreach-composer": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "outreach-composer",
+  "category": "business"
+ },
+ "anthropic.small-business.pay-the-bills": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "pay-the-bills",
+  "category": "business"
+ },
+ "anthropic.small-business.payroll-prep": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "payroll-prep",
+  "category": "business"
+ },
+ "anthropic.small-business.plan-payroll": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "plan-payroll",
+  "category": "business"
+ },
+ "anthropic.small-business.proposal-builder": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "proposal-builder",
+  "category": "business"
+ },
+ "anthropic.small-business.reactivate": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "reactivate",
+  "category": "business"
+ },
+ "anthropic.small-business.report-builder": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "report-builder",
+  "category": "business"
+ },
+ "anthropic.small-business.report-pack": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "report-pack",
+  "category": "business"
+ },
+ "anthropic.small-business.restock": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "restock",
+  "category": "business"
+ },
+ "anthropic.small-business.review-reputation": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "review-reputation",
+  "category": "business"
+ },
+ "anthropic.small-business.seo-ai-visibility": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "seo-ai-visibility",
+  "category": "business"
+ },
+ "anthropic.small-business.smb-onboard": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "smb-onboard",
+  "category": "business"
+ },
+ "anthropic.small-business.smb-router": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "smb-router",
+  "category": "business"
+ },
+ "anthropic.small-business.social-content-engine": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "social-content-engine",
+  "category": "business"
+ },
+ "anthropic.small-business.speed-to-lead": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "speed-to-lead",
+  "category": "business"
+ },
+ "anthropic.small-business.tax-prep": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "tax-prep",
+  "category": "business"
+ },
+ "anthropic.small-business.tax-season-organizer": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "tax-season-organizer",
+  "category": "business"
+ },
+ "anthropic.small-business.ticket-deflector": {
+  "vendor": "anthropic",
+  "repo": "anthropics/knowledge-work-plugins",
+  "plugin": "small-business",
+  "skill": "ticket-deflector",
+  "category": "business"
+ },
+ "openai.aspnet-core": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "aspnet-core",
+  "category": "code"
+ },
+ "openai.chatgpt-apps": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "chatgpt-apps",
+  "category": "code"
+ },
+ "openai.cli-creator": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "cli-creator",
+  "category": "code"
+ },
+ "openai.cloudflare-deploy": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "cloudflare-deploy",
+  "category": "workflow"
+ },
+ "openai.define-goal": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "define-goal",
+  "category": "workflow"
+ },
+ "openai.gh-address-comments": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "gh-address-comments",
+  "category": "workflow"
+ },
+ "openai.gh-fix-ci": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "gh-fix-ci",
+  "category": "workflow"
+ },
+ "openai.hatch-pet": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "hatch-pet",
+  "category": "media"
+ },
+ "openai.jupyter-notebook": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "jupyter-notebook",
+  "category": "data"
+ },
+ "openai.linear": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "linear",
+  "category": "productivity"
+ },
+ "openai.migrate-to-codex": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "migrate-to-codex",
+  "category": "workflow"
+ },
+ "openai.netlify-deploy": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "netlify-deploy",
+  "category": "workflow"
+ },
+ "openai.notion-knowledge-capture": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "notion-knowledge-capture",
+  "category": "productivity"
+ },
+ "openai.notion-meeting-intelligence": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "notion-meeting-intelligence",
+  "category": "productivity"
+ },
+ "openai.notion-research-documentation": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "notion-research-documentation",
+  "category": "writing"
+ },
+ "openai.notion-spec-to-implementation": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "notion-spec-to-implementation",
+  "category": "code"
+ },
+ "openai.openai-docs": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "openai-docs",
+  "category": "code"
+ },
+ "openai.pdf": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "pdf",
+  "category": "writing"
+ },
+ "openai.playwright": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "playwright",
+  "category": "testing"
+ },
+ "openai.playwright-interactive": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "playwright-interactive",
+  "category": "testing"
+ },
+ "openai.render-deploy": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "render-deploy",
+  "category": "workflow"
+ },
+ "openai.screenshot": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "screenshot",
+  "category": "testing"
+ },
+ "openai.security-best-practices": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "security-best-practices",
+  "category": "code"
+ },
+ "openai.security-ownership-map": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "security-ownership-map",
+  "category": "code"
+ },
+ "openai.security-threat-model": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "security-threat-model",
+  "category": "code"
+ },
+ "openai.sentry": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "sentry",
+  "category": "workflow"
+ },
+ "openai.speech": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "speech",
+  "category": "media"
+ },
+ "openai.transcribe": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "transcribe",
+  "category": "media"
+ },
+ "openai.vercel-deploy": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "vercel-deploy",
+  "category": "workflow"
+ },
+ "openai.winui-app": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "winui-app",
+  "category": "code"
+ },
+ "openai.yeet": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "yeet",
+  "category": "workflow"
+ },
+ "openai.imagegen": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "imagegen",
+  "category": "media"
+ },
+ "openai.plugin-creator": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "plugin-creator",
+  "category": "workflow"
+ },
+ "openai.skill-creator": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "skill-creator",
+  "category": "workflow"
+ },
+ "openai.skill-installer": {
+  "vendor": "openai",
+  "repo": "openai/skills",
+  "plugin": null,
+  "skill": "skill-installer",
+  "category": "workflow"
+ }
+}

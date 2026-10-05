@@ -1,0 +1,380 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #070909;
+  --bg-secondary: #0d1117;
+  --bg-tertiary: #161b22;
+  --bg-hover: #1c2128;
+  --bg-active: #21262d;
+  --border-color: #30363d;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --accent: #00f5a0;
+  /* text/icons ON an accent-colored surface; each theme keeps this at >= 4.5:1 */
+  --on-accent: var(--bg-primary);
+  --accent-hover: #00d68a;
+  --accent-glow: rgba(0, 245, 160, 0.15);
+  --error: #f85149;
+  --warning: #d29922;
+  --success: #3fb950;
+  --font-mono: 'Consolas', 'Monaco', 'Courier New', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* Editor syntax tokens (override per color scheme) */
+  --tok-kw: #ff7b72;
+  --tok-str: #a5d6ff;
+  --tok-com: #8b949e;
+  --tok-fn: #d2a8ff;
+  --tok-num: #79c0ff;
+  --tok-key: #7ee787;
+  --tok-typ: #ffa657;
+  --tok-punc: #c9d1d9;
+}
+
+/* --- Color schemes (switchable in Settings via data-theme) --------------- */
+:root[data-theme="ocean"] {
+  --bg-primary: #070b12;
+  --bg-secondary: #0d1424;
+  --bg-tertiary: #141e33;
+  --bg-hover: #1a2740;
+  --bg-active: #22304d;
+  --border-color: #2b3a57;
+  --accent: #38bdf8;
+  --accent-hover: #0ea5e9;
+  --accent-glow: rgba(56, 189, 248, 0.15);
+  --tok-kw: #f97583; --tok-str: #9ecbff; --tok-com: #6b7a99; --tok-fn: #b392f0; --tok-num: #79b8ff; --tok-key: #56d4dd; --tok-typ: #ffab70; --tok-punc: #c9d6e6;
+}
+
+:root[data-theme="violet"] {
+  --bg-primary: #0a0710;
+  --bg-secondary: #140d1f;
+  --bg-tertiary: #1e1430;
+  --bg-hover: #281a40;
+  --bg-active: #33224d;
+  --border-color: #3d2b57;
+  --accent: #c084fc;
+  --accent-hover: #a855f7;
+  --accent-glow: rgba(192, 132, 252, 0.16);
+  --tok-kw: #ff7bd5; --tok-str: #c3e88d; --tok-com: #7a6b99; --tok-fn: #c792ea; --tok-num: #f78c6c; --tok-key: #89ddff; --tok-typ: #f78c6c; --tok-punc: #d6c9e6;
+}
+
+:root[data-theme="amber"] {
+  --bg-primary: #0c0a06;
+  --bg-secondary: #17130c;
+  --bg-tertiary: #221c11;
+  --bg-hover: #2c2416;
+  --bg-active: #362c1b;
+  --border-color: #4a3d24;
+  --accent: #fbbf24;
+  --accent-hover: #f59e0b;
+  --accent-glow: rgba(251, 191, 36, 0.15);
+  --tok-kw: #ffab70; --tok-str: #ecc48d; --tok-com: #8a7a5c; --tok-fn: #ffd580; --tok-num: #f78c6c; --tok-key: #addb67; --tok-typ: #f0a35e; --tok-punc: #e6dcc9;
+}
+
+:root[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f4f6f8;
+  --bg-tertiary: #e9edf1;
+  --bg-hover: #dfe4ea;
+  --bg-active: #d3d9e0;
+  --border-color: #d0d7de;
+  --text-primary: #1f2328;
+  --text-secondary: #57606a;
+  --text-muted: #6a737d;
+  --accent: #0a7d59;
+  --accent-hover: #08694a;
+  --on-accent: #ffffff;
+  --accent-glow: rgba(10, 125, 89, 0.14);
+  --tok-kw: #cf222e; --tok-str: #0a3069; --tok-com: #6e7781; --tok-fn: #8250df; --tok-num: #0550ae; --tok-key: #116329; --tok-typ: #953800; --tok-punc: #24292f;
+}
+
+/* Popular editor palettes (each defines surfaces, text, accent and syntax tokens) */
+:root[data-theme="dracula"] {
+  --bg-primary: #191a21; --bg-secondary: #21222c; --bg-tertiary: #282a36; --bg-hover: #313442; --bg-active: #3a3d4f;
+  --border-color: #44475a; --text-primary: #f8f8f2; --text-secondary: #b9bcd0; --text-muted: #7d82a0;
+  --accent: #bd93f9; --accent-hover: #a67df0; --accent-glow: rgba(189, 147, 249, 0.16);
+  --error: #ff5555; --warning: #ffb86c; --success: #50fa7b;
+  --tok-kw: #ff79c6; --tok-str: #f1fa8c; --tok-com: #6272a4; --tok-fn: #50fa7b; --tok-num: #bd93f9; --tok-key: #8be9fd; --tok-typ: #ffb86c; --tok-punc: #f8f8f2;
+}
+
+:root[data-theme="nord"] {
+  --bg-primary: #242933; --bg-secondary: #2e3440; --bg-tertiary: #3b4252; --bg-hover: #434c5e; --bg-active: #4c566a;
+  --border-color: #4c566a; --text-primary: #eceff4; --text-secondary: #d8dee9; --text-muted: #8f9bb3;
+  --accent: #88c0d0; --accent-hover: #81a1c1; --accent-glow: rgba(136, 192, 208, 0.16);
+  --error: #bf616a; --warning: #ebcb8b; --success: #a3be8c;
+  --tok-kw: #81a1c1; --tok-str: #a3be8c; --tok-com: #616e88; --tok-fn: #88c0d0; --tok-num: #b48ead; --tok-key: #8fbcbb; --tok-typ: #ebcb8b; --tok-punc: #d8dee9;
+}
+
+:root[data-theme="tokyo"] {
+  --bg-primary: #16161e; --bg-secondary: #1a1b26; --bg-tertiary: #24283b; --bg-hover: #2f334d; --bg-active: #3b4261;
+  --border-color: #3b4261; --text-primary: #c0caf5; --text-secondary: #a9b1d6; --text-muted: #737aa2;
+  --accent: #7aa2f7; --accent-hover: #6a91e6; --accent-glow: rgba(122, 162, 247, 0.16);
+  --error: #f7768e; --warning: #e0af68; --success: #9ece6a;
+  --tok-kw: #bb9af7; --tok-str: #9ece6a; --tok-com: #565f89; --tok-fn: #7aa2f7; --tok-num: #ff9e64; --tok-key: #73daca; --tok-typ: #e0af68; --tok-punc: #a9b1d6;
+}
+
+:root[data-theme="onedark"] {
+  --bg-primary: #21252b; --bg-secondary: #282c34; --bg-tertiary: #2c313a; --bg-hover: #333842; --bg-active: #3e4451;
+  --border-color: #3e4451; --text-primary: #d7dae0; --text-secondary: #abb2bf; --text-muted: #7f848e;
+  --accent: #61afef; --accent-hover: #4d9de0; --accent-glow: rgba(97, 175, 239, 0.16);
+  --error: #e06c75; --warning: #e5c07b; --success: #98c379;
+  --tok-kw: #c678dd; --tok-str: #98c379; --tok-com: #5c6370; --tok-fn: #61afef; --tok-num: #d19a66; --tok-key: #e06c75; --tok-typ: #e5c07b; --tok-punc: #abb2bf;
+}
+
+:root[data-theme="gruvbox"] {
+  --bg-primary: #1d2021; --bg-secondary: #282828; --bg-tertiary: #32302f; --bg-hover: #3c3836; --bg-active: #504945;
+  --border-color: #504945; --text-primary: #ebdbb2; --text-secondary: #bdae93; --text-muted: #928374;
+  --accent: #fabd2f; --accent-hover: #d79921; --accent-glow: rgba(250, 189, 47, 0.16);
+  --error: #fb4934; --warning: #fe8019; --success: #b8bb26;
+  --tok-kw: #fb4934; --tok-str: #b8bb26; --tok-com: #928374; --tok-fn: #8ec07c; --tok-num: #d3869b; --tok-key: #83a598; --tok-typ: #fabd2f; --tok-punc: #ebdbb2;
+}
+
+:root[data-theme="catppuccin"] {
+  --bg-primary: #11111b; --bg-secondary: #181825; --bg-tertiary: #1e1e2e; --bg-hover: #313244; --bg-active: #45475a;
+  --border-color: #45475a; --text-primary: #cdd6f4; --text-secondary: #a6adc8; --text-muted: #7f849c;
+  --accent: #cba6f7; --accent-hover: #b48ef0; --accent-glow: rgba(203, 166, 247, 0.16);
+  --error: #f38ba8; --warning: #f9e2af; --success: #a6e3a1;
+  --tok-kw: #cba6f7; --tok-str: #a6e3a1; --tok-com: #6c7086; --tok-fn: #89b4fa; --tok-num: #fab387; --tok-key: #94e2d5; --tok-typ: #f9e2af; --tok-punc: #bac2de;
+}
+
+:root[data-theme="solarized"] {
+  --bg-primary: #00212b; --bg-secondary: #002b36; --bg-tertiary: #073642; --bg-hover: #0d4351; --bg-active: #16505f;
+  --border-color: #1f5a68; --text-primary: #d5dede; --text-secondary: #93a1a1; --text-muted: #6c8288;
+  --accent: #2aa198; --accent-hover: #1f8a82; --accent-glow: rgba(42, 161, 152, 0.18);
+  --error: #dc322f; --warning: #b58900; --success: #859900;
+  --tok-kw: #859900; --tok-str: #2aa198; --tok-com: #586e75; --tok-fn: #268bd2; --tok-num: #d33682; --tok-key: #b58900; --tok-typ: #cb4b16; --tok-punc: #93a1a1;
+}
+
+:root[data-theme="solarized-light"] {
+  --bg-primary: #fdf6e3; --bg-secondary: #eee8d5; --bg-tertiary: #e6dfc8; --bg-hover: #ddd6c1; --bg-active: #d3cbb7;
+  --border-color: #d3cbb7; --text-primary: #073642; --text-secondary: #586e75; --text-muted: #657b83;
+  --accent: #1f6fa8; --accent-hover: #195c8b; --on-accent: #ffffff; --accent-glow: rgba(31, 111, 168, 0.14);
+  --error: #dc322f; --warning: #b58900; --success: #859900;
+  --tok-kw: #859900; --tok-str: #2aa198; --tok-com: #93a1a1; --tok-fn: #268bd2; --tok-num: #d33682; --tok-key: #b58900; --tok-typ: #cb4b16; --tok-punc: #586e75;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Selection */
+::selection {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+/* Utility classes */
+.glass {
+  background: rgba(13, 17, 23, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+}
+
+.glow {
+  box-shadow: 0 0 20px var(--accent-glow);
+}
+
+.text-glow {
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.2s ease-out;
+}
+
+.animate-pulse-slow {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Code highlighting */
+.code-keyword { color: #ff7b72; }
+.code-string { color: #a5d6ff; }
+.code-comment { color: #8b949e; font-style: italic; }
+.code-function { color: #d2a8ff; }
+.code-number { color: #79c0ff; }
+
+/* Editor surface: the transparent textarea stays interactive above highlighted code. */
+.code-editor-gutter {
+  width: 3.5rem;
+  flex: 0 0 3.5rem;
+  overflow: hidden;
+  padding: 14px 10px 14px 0;
+  border-right: 1px solid var(--border-color);
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  text-align: right;
+  font: 13px/24px var(--font-mono);
+  user-select: none;
+}
+
+.code-editor-highlight,
+.code-editor-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  padding: 14px 16px;
+  font: 13px/24px var(--font-mono);
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}
+
+.code-editor-highlight {
+  pointer-events: none;
+  color: var(--text-primary);
+  scrollbar-width: none;
+}
+
+.code-editor-highlight::-webkit-scrollbar { display: none; }
+.code-editor-highlight code { display: block; min-width: max-content; font: inherit; }
+
+.code-editor-input {
+  z-index: 1;
+  resize: none;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--accent);
+  -webkit-text-fill-color: transparent;
+}
+
+.code-editor-input::selection {
+  background: rgba(88, 166, 255, 0.32);
+  -webkit-text-fill-color: transparent;
+}
+
+/* CodeMirror fills the editor host (the host is a flex child: absolute sizing is the robust way) */
+.code-editor-host .cm-editor { position: absolute; inset: 0; }
+
+.tok-kw { color: var(--tok-kw); }
+.tok-str { color: var(--tok-str); }
+.tok-com { color: var(--tok-com); font-style: italic; }
+.tok-fn { color: var(--tok-fn); }
+.tok-num { color: var(--tok-num); }
+.tok-key { color: var(--tok-key); }
+.tok-typ { color: var(--tok-typ); }
+.tok-punc { color: var(--tok-punc); }
+
+/* Search-hit highlight: Tailwind's `/30` opacity does not work on CSS-variable colors,
+   so the browser's default yellow <mark> (light text on yellow) leaked through. */
+mark {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Work-in-progress line under the header: a lit segment sweeps left to right. */
+.busy-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.busy-line::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: busy-sweep 1.4s ease-in-out infinite;
+}
+@keyframes busy-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .busy-line::before { animation: none; width: 100%; opacity: 0.6; }
+}
+
+/* Chat tab when the project has unfinished tasks: the brand glow around the icon; it pulses while one runs */
+.task-glow {
+  color: var(--accent);
+  filter: drop-shadow(0 0 4px var(--accent));
+}
+.task-glow-strong {
+  color: var(--accent);
+  animation: task-pulse 1.6s ease-in-out infinite;
+}
+@keyframes task-pulse {
+  0%, 100% { filter: drop-shadow(0 0 2px var(--accent)); }
+  50% { filter: drop-shadow(0 0 8px var(--accent)) drop-shadow(0 0 2px var(--accent)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-glow-strong { animation: none; filter: drop-shadow(0 0 5px var(--accent)); }
+}
+
+/* Native controls (inputs, selects, scrollbars) follow the scheme's light/dark nature. */
+:root { color-scheme: dark; }
+:root[data-theme="light"],
+:root[data-theme="solarized-light"] { color-scheme: light; }
+input, textarea, select { color: var(--text-primary); }
+
+/* Animated otto mark (working state): the rings slide past each other, the core breathes. */
+.otto-mark-live .om-a { animation: om-a 1.6s ease-in-out infinite; }
+.otto-mark-live .om-b { animation: om-b 1.6s ease-in-out infinite; }
+.otto-mark-live .om-core { animation: om-core 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes om-a { 0%, 100% { transform: translateX(-1.2px); } 50% { transform: translateX(3.6px); } }
+@keyframes om-b { 0%, 100% { transform: translateX(1.2px); } 50% { transform: translateX(-3.6px); } }
+@keyframes om-core { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.55); opacity: 0.6; } }
+@media (prefers-reduced-motion: reduce) {
+  .otto-mark-live .om-a, .otto-mark-live .om-b, .otto-mark-live .om-core { animation: none; }
+}

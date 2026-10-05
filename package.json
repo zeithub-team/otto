@@ -1,0 +1,40 @@
+{
+  "name": "zeithub-otto",
+  "version": "0.1.7",
+  "private": true,
+  "description": "zeithub.otto — local AI coding studio (Ollama, desktop + web)",
+  "author": "zeithub.team",
+  "license": "MIT",
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c cyan,magenta \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "npm run server -w @otto/desktop",
+    "dev:web": "npm run dev -w @otto/web",
+    "dev:desktop": "concurrently -k -n web,app -c magenta,green \"npm run dev:web\" \"npm run dev -w @otto/desktop\"",
+    "build": "npm run build:web && npm run build:desktop",
+    "build:web": "npm run build -w @otto/web",
+    "build:desktop": "npm run build -w @otto/desktop",
+    "start": "npm run start -w @otto/desktop",
+    "dist:win": "npm run dist:win -w @otto/desktop",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "check": "npm run typecheck && npm run lint && npm run check:i18n && npm run check:alpha && npm run test",
+    "clean": "node scripts/clean.mjs",
+    "clean:all": "node scripts/clean.mjs --deps",
+    "test": "npm run test -w @otto/desktop",
+    "check:i18n": "npm run check:i18n --workspaces --if-present",
+    "check:alpha": "npm run check:alpha --workspaces --if-present",
+    "pack:win": "npm run pack:win -w @otto/desktop"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "allowScripts": {
+    "electron@31.7.7": true
+  }
+}
