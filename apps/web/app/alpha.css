@@ -2,6 +2,7 @@
 .bg-\[var\(--accent-glow\)\]\/30 { background-color: color-mix(in srgb, var(--accent-glow) 30%, transparent); }
 .bg-\[var\(--accent-glow\)\]\/40 { background-color: color-mix(in srgb, var(--accent-glow) 40%, transparent); }
 .bg-\[var\(--accent-glow\)\]\/60 { background-color: color-mix(in srgb, var(--accent-glow) 60%, transparent); }
+.bg-\[var\(--accent\)\]\/15 { background-color: color-mix(in srgb, var(--accent) 15%, transparent); }
 .bg-\[var\(--accent\)\]\/30 { background-color: color-mix(in srgb, var(--accent) 30%, transparent); }
 .bg-\[var\(--bg-primary\)\]\/40 { background-color: color-mix(in srgb, var(--bg-primary) 40%, transparent); }
 .bg-\[var\(--bg-primary\)\]\/50 { background-color: color-mix(in srgb, var(--bg-primary) 50%, transparent); }
