@@ -68,7 +68,7 @@ const SHORT: Record<string, string> = {
   fetch_url: 'read a web page (text). args: {url}',
   use_skill: 'load the rules of a skill listed in the system prompt before doing that kind of work. args: {name}',
   read_skill_file: 'read a file that comes with a skill. args: {name, path}',
-  run_command: 'run ONE shell command in the project folder (Windows PowerShell). background=true for servers that keep running (php artisan serve, npm run dev). args: {command, background?}',
+  run_command: `run ONE shell command in the project folder (${process.platform === 'win32' ? 'Windows PowerShell' : process.platform === 'darwin' ? 'macOS, sh' : 'Linux, sh'}). background=true for servers that keep running (php artisan serve, npm run dev). args: {command, background?}`,
   otto_docker: 'the project\'s Docker services from otto.compose.yaml. args: {action: status|up|down|service-start|service-stop|service-restart|service-logs, service?}',
   otto_preview: 'show in Otto\'s Preview tab. args: {mode: "file", path} for an HTML file; {mode: "url", url} for a running server; {mode: "run"} to start the project and show it',
   otto_open: 'open a section of Otto. args: {view: chat|project|data|ssh|agents|services|models|plugins|connectors|settings|preview|docs, page?: terminal|agent|models|permissions|general|projects|server}',

@@ -456,8 +456,12 @@ export function handleInstall(
     res.end();
     return;
   }
+  if (process.platform === 'darwin') {
+    brewInstall(res, toolId, action);
+    return;
+  }
   if (process.platform !== 'win32') {
-    res.write(JSON.stringify({ line: 'Автоустановка доступна только в Windows (winget).' }) + '\n');
+    res.write(JSON.stringify({ line: 'Автоустановка доступна только в Windows (winget) и macOS (Homebrew).' }) + '\n');
     res.write(JSON.stringify({ done: true, code: 1 }) + '\n');
     res.end();
     return;
@@ -532,4 +536,40 @@ export function handleInstall(
   res.on('close', () => {
     if (child.exitCode === null) child.kill();
   });
+}
+
+// ------------------------------------------------------------------ macOS --
+
+/** Homebrew formulae / casks for the tools on macOS (winget ids are Windows-only). */
+const BREW: Record<string, string[]> = {
+  docker: ['--cask', 'docker'], tabby: ['--cask', 'tabby'], ollama: ['--cask', 'ollama'],
+  git: ['git'], gh: ['gh'], node: ['node'], python: ['python'], php: ['php'], ruby: ['ruby'], composer: ['composer'],
+  go: ['go'], rust: ['rust'], java: ['openjdk'], dotnet: ['--cask', 'dotnet-sdk'],
+};
+
+/** Homebrew lives in /opt/homebrew (Apple Silicon) or /usr/local (Intel); a GUI app's PATH has neither. */
+function brewPath(): string | null {
+  return ['/opt/homebrew/bin/brew', '/usr/local/bin/brew'].find((p) => fs.existsSync(p)) ?? null;
+}
+
+function brewInstall(res: http.ServerResponse, toolId: string, action: InstallAction): void {
+  const send = (o: Record<string, unknown>): void => { if (!res.writableEnded) res.write(JSON.stringify(o) + '\n'); };
+  const finish = (code: number): void => { send({ done: true, code }); if (!res.writableEnded) res.end(); };
+  const brew = brewPath();
+  const pkg = BREW[toolId];
+  if (!brew) {
+    send({ line: 'Homebrew is not installed. Install it from https://brew.sh (one command in Terminal), then try again.' });
+    finish(1);
+    return;
+  }
+  if (!pkg) { send({ line: `No Homebrew package for ${toolId}.` }); finish(1); return; }
+  const verb = action === 'uninstall' ? 'uninstall' : action === 'install' ? 'install' : 'reinstall';
+  const args = [verb, ...pkg];
+  send({ line: `brew ${args.join(' ')}` });
+  const child = spawn(brew, args, { env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: '1', NONINTERACTIVE: '1' } });
+  const pump = (buf: Buffer): void => { for (const line of buf.toString('utf8').split(/\r?\n/)) if (line.trim()) send({ line: line.trim() }); };
+  child.stdout.on('data', pump);
+  child.stderr.on('data', pump);
+  child.on('error', (exc) => { send({ line: exc.message }); finish(1); });
+  child.on('close', (code) => finish(code ?? 1));
 }

@@ -956,6 +956,9 @@ function gate(kind: 'shell' | 'ssh' | 'connector', interactive: boolean, always 
   return interactive ? 'ask' : 'This needs the user\'s approval, and this run has no chat to ask in. Tell the user what to run.';
 }
 
+/** The shell run_command uses on this OS (see shell.ts), named for the models. */
+const SHELL_NAME = process.platform === 'win32' ? 'Windows: PowerShell' : process.platform === 'darwin' ? 'macOS: sh, zsh-compatible' : 'Linux: sh';
+
 const DECLINED = 'The user declined this. Do not repeat it; continue without it or ask what they prefer.';
 const READ_ONLY_DOCKER = new Set(['status', 'validate', 'service-logs']);
 const DOCKER_ACTIONS = new Set(['status', 'validate', 'up', 'down', 'runtime-up', 'runtime-down', 'service-start', 'service-stop', 'service-restart', 'service-logs']);
@@ -965,7 +968,7 @@ function bridgeTools(root: string, pid: number | null, showUrl?: (url: string) =
   return [
     {
       name: 'run_command',
-      description: 'Run ONE shell command in the project folder and get its output (Windows: PowerShell): npm/pnpm/composer/pip, git, migrations, tests, docker compose. The user approves it in Otto. background=true for dev servers and watchers. timeout_seconds up to 600 (default 120).',
+      description: 'Run ONE shell command in the project folder and get its output (' + SHELL_NAME + '): npm/pnpm/composer/pip, git, migrations, tests, docker compose. The user approves it in Otto. background=true for dev servers and watchers. timeout_seconds up to 600 (default 120).',
       properties: {
         command: { type: 'string', description: 'The command line to run' },
         timeout_seconds: { type: 'number', description: 'Time limit in seconds (default 120, max 600)' },
@@ -1186,7 +1189,7 @@ function workspaceTools(webEnabled = true): unknown[] {
     ),
     tool(
       'run_command',
-      'Run ONE shell command in the project folder and get its output (Windows: PowerShell). Use it for npm/pnpm/composer/pip, git, migrations and tests. For Docker Compose use Otto’s Docker integration (`otto_docker`) or write a normal `docker compose -f otto.compose.yaml ...` command; Otto routes supported Compose actions through its local Services API. The user may have to approve each command; never run destructive commands. timeout_seconds: up to 600 (default 120).',
+      'Run ONE shell command in the project folder and get its output (' + SHELL_NAME + '). Use it for npm/pnpm/composer/pip, git, migrations and tests. For Docker Compose use Otto’s Docker integration (`otto_docker`) or write a normal `docker compose -f otto.compose.yaml ...` command; Otto routes supported Compose actions through its local Services API. The user may have to approve each command; never run destructive commands. timeout_seconds: up to 600 (default 120).',
       {
         command: { type: 'string', description: 'The command line to run' },
         timeout_seconds: { type: 'number', description: 'Time limit in seconds (default 120, max 600)' },

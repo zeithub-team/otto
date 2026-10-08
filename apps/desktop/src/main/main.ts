@@ -2,11 +2,27 @@ import { app, BrowserWindow, clipboard, ipcMain, Menu, shell } from 'electron';
 import { clipboardAction } from './shortcuts';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+import { spawnSync } from 'child_process';
 import { startEmbeddedServer } from './server';
 import { holdCloseForTabby, installTabby } from './tabby';
 import { startUpdateChecks } from './updates';
 
 const isDev = process.argv.includes('--dev');
+
+// macOS: an app started from the Dock gets a bare PATH (/usr/bin:/bin…), without Homebrew, nvm or
+// ~/.local/bin — node, git, npx, ollama and the Claude/Codex CLIs would not be found. Take the PATH
+// of the user's login shell, plus the usual folders in case the shell does not answer.
+if (process.platform === 'darwin') {
+  const extra = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', path.join(os.homedir(), '.local', 'bin')];
+  let shellPath = '';
+  try {
+    const r = spawnSync(process.env.SHELL || '/bin/zsh', ['-ilc', 'printf "%s" "$PATH"'], { encoding: 'utf8', timeout: 4000 });
+    shellPath = (r.stdout ?? '').trim().split('\n').pop() ?? '';
+  } catch { /* keep the defaults */ }
+  const parts = [...shellPath.split(':'), ...(process.env.PATH ?? '').split(':'), ...extra].filter(Boolean);
+  process.env.PATH = [...new Set(parts)].join(':');
+}
 
 const apiPort = Number(process.env.OTTO_PORT ?? 8000);
 

@@ -19,7 +19,8 @@
     "test": "npm run build && node --test \"dist/server/__tests__/*.test.js\"",
     "installer-assets": "node scripts/make-installer-assets.mjs",
     "dist:store": "npm run build && npm run build:renderer && node scripts/dist-store.mjs",
-    "store-assets": "node scripts/make-store-assets.mjs"
+    "store-assets": "node scripts/make-store-assets.mjs",
+    "dist:mac": "npm run build && npm run build:renderer && electron-builder --mac --publish never"
   },
   "devDependencies": {
     "@types/node": "^20.11.17",
@@ -43,7 +44,8 @@
       "renderer/**/*",
       "skills/**/*",
       "skills-library/**/*",
-      "assets/**/*"
+      "assets/**/*",
+      "!assets/icon.png"
     ],
     "win": {
       "target": [
@@ -90,6 +92,33 @@
         "es-ES"
       ],
       "artifactName": "zeithub-otto-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.developer-tools",
+      "artifactName": "zeithub-otto-${version}-${arch}.${ext}",
+      "identity": null,
+      "darkModeSupport": true
+    },
+    "dmg": {
+      "title": "zeithub.otto ${version}",
+      "artifactName": "zeithub-otto-${version}-${arch}.${ext}"
     }
   },
   "dependencies": {
