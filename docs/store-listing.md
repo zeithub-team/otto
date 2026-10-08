@@ -2,7 +2,8 @@
 
 Texts for Partner Center → Store listings, one block per language of the package
 (ru-RU, en-US, az-Latn-AZ, ka-GE, it-IT, es-ES). Fields: Description, Short description,
-Product features (one per line), Search terms (up to 7).
+Product features (one per line), Search terms (up to 7, at most 30 characters each, never other
+companies' product names such as Ollama, Claude or Codex — Store policy 10.1.3).
 
 ---
 
@@ -33,7 +34,7 @@ zeithub.otto — студия разработки с ИИ, которая ра�
 Интерфейс на шести языках; без аккаунта и телеметрии
 
 ### Search terms
-AI IDE, Ollama, локальные модели, редактор кода, Claude, Codex, ИИ-помощник
+AI IDE, локальные модели, редактор кода, ИИ-помощник, генерация кода, конструктор сайтов, офлайн ИИ
 
 ---
 
@@ -64,7 +65,7 @@ Attachments: images, PDF, DOCX, XLSX; skills library
 Interface in six languages; no account, no telemetry
 
 ### Search terms
-AI IDE, Ollama, local LLM, code editor, Claude, Codex, coding assistant
+AI IDE, local LLM, code editor, coding assistant, code generation, website builder, offline AI
 
 ---
 
@@ -95,7 +96,7 @@ Qoşmalar: şəkillər, PDF, DOCX, XLSX; bacarıqlar kitabxanası
 Altı dildə interfeys; hesab və telemetriya yoxdur
 
 ### Search terms
-AI IDE, Ollama, lokal modellər, kod redaktoru, Claude, Codex, AI köməkçi
+AI IDE, lokal modellər, kod redaktoru, AI köməkçi, kod generasiyası, sayt qurucusu, oflayn AI
 
 ---
 
@@ -126,7 +127,7 @@ zeithub.otto — ხელოვნური ინტელექტით მ�
 ინტერფეისი ექვს ენაზე; ანგარიშისა და ტელემეტრიის გარეშე
 
 ### Search terms
-AI IDE, Ollama, ლოკალური მოდელები, კოდის რედაქტორი, Claude, Codex, AI ასისტენტი
+AI IDE, ლოკალური მოდელები, კოდის რედაქტორი, AI ასისტენტი, კოდის გენერაცია, საიტის კონსტრუქტორი, ოფლაინ AI
 
 ---
 
@@ -157,7 +158,7 @@ Allegati: immagini, PDF, DOCX, XLSX; libreria di skill
 Interfaccia in sei lingue; nessun account, nessuna telemetria
 
 ### Search terms
-AI IDE, Ollama, LLM locale, editor di codice, Claude, Codex, assistente IA
+AI IDE, LLM locale, editor di codice, assistente IA, generazione di codice, creazione siti web, IA offline
 
 ---
 
@@ -188,4 +189,4 @@ Adjuntos: imágenes, PDF, DOCX, XLSX; biblioteca de habilidades
 Interfaz en seis idiomas; sin cuenta ni telemetría
 
 ### Search terms
-AI IDE, Ollama, LLM local, editor de código, Claude, Codex, asistente de IA
+AI IDE, LLM local, editor de código, asistente de IA, generación de código, creador de sitios web, IA sin conexión
