@@ -454,7 +454,7 @@ export function Composer({ onSend, onStop, disabled, isProcessing, queuedCount =
                 params={params}
                 loading={modelsLoading}
                 onSelect={(m) => { setModel(m); pushRecent(m); setProjectModel(projectId, m); setModelOpen(false); }}
-                onParams={(p) => { setParams(p); saveParams(p); }}
+                onParams={(p) => { setParams(p); saveParams(p); window.dispatchEvent(new CustomEvent('otto:params-changed', { detail: { projectId, numCtx: p.numCtx, effort: p.effort } })); }}
                 onRefresh={() => void refreshModels()}
                 onClose={() => setModelOpen(false)}
               />
@@ -504,21 +504,32 @@ export function Composer({ onSend, onStop, disabled, isProcessing, queuedCount =
               handleSend();
             }
           }}
-          placeholder={placeholder || t('cp.placeholder')}
+          placeholder={isProcessing ? t('cp.injectPh') : placeholder || t('cp.placeholder')}
           rows={1}
           className="flex-1 px-4 py-2.5 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] resize-none min-h-[42px] max-h-[200px] transition-colors"
         />
 
         {/* Stop / Send (split) */}
         {isProcessing ? (
-          <button
-            onClick={onStop}
-            title={t('cp.stop')}
-            className="shrink-0 h-[42px] px-4 rounded-lg bg-gray-500/15 border border-gray-500/40 text-gray-500 text-sm font-medium hover:bg-gray-500/25 transition-colors flex items-center gap-2"
-          >
-            <Square size={12} fill="currentColor" />
-            Stop
-          </button>
+          <div className="shrink-0 flex gap-1.5">
+            {/* a clarification for the running task: the agent reads it at its next step */}
+            <button
+              onClick={() => handleSend(false)}
+              disabled={disabled || !value.trim()}
+              title={t('cp.inject')}
+              className="h-[42px] px-3 rounded-lg bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center"
+            >
+              <ArrowUp size={15} />
+            </button>
+            <button
+              onClick={onStop}
+              title={t('cp.stop')}
+              className="h-[42px] px-4 rounded-lg bg-red-500/15 border border-red-500/40 text-red-500 text-sm font-medium hover:bg-red-500/25 transition-colors flex items-center gap-2"
+            >
+              <Square size={12} fill="currentColor" />
+              Stop
+            </button>
+          </div>
         ) : (
           <div className="shrink-0 flex relative" ref={sendMenuRef}>
             <button

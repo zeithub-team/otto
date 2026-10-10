@@ -58,6 +58,15 @@ export function useChat(projectId?: number, chatId?: number) {
   const messagesRef = useRef<ChatMessage[]>([]);
   const messageIdCounter = useRef(0);
   const isProcessingRef = useRef(false);
+  const chatIdRef = useRef(chatId);
+  chatIdRef.current = chatId;
+
+  /** A control frame for this chat's run (attach / stop / inject / update). */
+  const control = useCallback((frame: Record<string, unknown>): boolean => {
+    if (!chatIdRef.current || wsRef.current?.readyState !== WebSocket.OPEN) return false;
+    wsRef.current.send(JSON.stringify({ ...frame, chat_id: chatIdRef.current }));
+    return true;
+  }, []);
 
   // Load persisted history from the backend when switching projects;
   // fall back to the local cache if the API is unreachable.
@@ -176,6 +185,13 @@ export function useChat(projectId?: number, chatId?: number) {
           window.dispatchEvent(new CustomEvent('otto:ui', { detail: msg }));
           return;
         }
+        // a run of this chat started or ended (also after re-attaching: the agent kept working meanwhile)
+        if ((msg as unknown as { role: string }).role === 'run_state') {
+          const st = msg as unknown as { chat_id?: number; running?: boolean };
+          if (st.chat_id === chatIdRef.current) setIsProcessing(Boolean(st.running));
+          return;
+        }
+        if ((msg as unknown as { role: string }).role === 'injected') return;
         if ((msg as unknown as { role: string }).role === 'model_switch') {
           window.dispatchEvent(new CustomEvent('otto:model-switch', { detail: { model: (msg as unknown as { model: string }).model } }));
           return;
@@ -248,9 +264,34 @@ export function useChat(projectId?: number, chatId?: number) {
     ws.onopen = () => {
       console.log('[WS] Connected to backend');
       setIsConnected(true);
+      // watch this chat: a run that is still going (another project was open meanwhile) is replayed
+      if (chatIdRef.current) ws.send(JSON.stringify({ action: 'attach', chat_id: chatIdRef.current }));
     };
     wsRef.current = ws;
   }, [projectId, generateId]);
+
+  // another chat of the same project: watch it instead
+  useEffect(() => {
+    if (chatId) control({ action: 'attach' });
+  }, [chatId, control]);
+
+  // a model / context / effort picked during a run applies from the agent's next step
+  useEffect(() => {
+    const onModel = (e: Event) => {
+      const d = (e as CustomEvent<{ projectId?: number | null; model?: string }>).detail;
+      if (isProcessingRef.current && d?.model && (d.projectId ?? null) === (projectId ?? null)) control({ action: 'update', model: d.model });
+    };
+    const onParams = (e: Event) => {
+      const d = (e as CustomEvent<{ numCtx?: number | null; effort?: string }>).detail;
+      if (isProcessingRef.current && d) control({ action: 'update', num_ctx: d.numCtx ?? undefined, effort: d.effort });
+    };
+    window.addEventListener('otto:model-changed', onModel);
+    window.addEventListener('otto:params-changed', onParams);
+    return () => {
+      window.removeEventListener('otto:model-changed', onModel);
+      window.removeEventListener('otto:params-changed', onParams);
+    };
+  }, [projectId, control]);
 
   // Auto-connect when projectId changes, with cleanup
   useEffect(() => {
@@ -330,13 +371,23 @@ export function useChat(projectId?: number, chatId?: number) {
   const sendMessage = useCallback((content: string, images?: string[], options?: SendOptions, queue?: boolean) => {
     if (!projectId || !content.trim()) return;
 
-    if (isProcessingRef.current || queue) {
+    if (queue && isProcessingRef.current) {
       const qId = generateId();
       setQueuedMessages((prev) => [...prev, { id: qId, content: content.trim(), images, options }]);
       return;
     }
+    // the agent is working: the message goes to it now (it reads it at its next step) instead of waiting
+    if (isProcessingRef.current && !images?.length) {
+      const userMsg: ChatMessage = { id: generateId(), role: 'user', content, timestamp: Date.now(), projectId, injected: true };
+      if (control({ action: 'inject', prompt: content, client_msg_id: userMsg.id })) {
+        setMessages((prev) => [...prev, userMsg]);
+        return;
+      }
+      setQueuedMessages((prev) => [...prev, { id: userMsg.id, content: content.trim(), images, options }]);
+      return;
+    }
     sendRaw(content, images, options);
-  }, [projectId, generateId, sendRaw]);
+  }, [projectId, generateId, sendRaw, control]);
 
   // Watch isProcessing to drain queue
   useEffect(() => {
@@ -349,13 +400,10 @@ export function useChat(projectId?: number, chatId?: number) {
   // Stop generation
   const stopGeneration = useCallback(() => {
     stoppedRef.current = true;
-    setIsProcessing(false);
-    if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
-      wsRef.current.close();
-    }
-    // Reconnect for next message
-    setTimeout(() => connect(), 100);
-  }, [connect]);
+    setQueuedMessages([]);
+    // the server stops the run (model request, CLI, tool loop) and sends the final "stopped" answer
+    if (!control({ action: 'stop' })) setIsProcessing(false);
+  }, [control]);
 
   const disconnect = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {

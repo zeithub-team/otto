@@ -1621,8 +1621,12 @@ export async function handleApi(
     // --- agents (background autonomous runs) ----------------------------
     if (pathname === '/api/agents') {
       if (method === 'GET') {
-        const projectId = params.has('project_id') ? queryInt(params, 'project_id') : undefined;
-        sendJson(res, 200, listAgents(projectId));
+        // all=1: every project's runs (the Agents tab's "all projects" view)
+        const projectId = params.get('all') === '1' || !params.has('project_id') ? undefined : queryInt(params, 'project_id');
+        sendJson(res, 200, listAgents(projectId, {
+          project: (id) => deps.db.getProject(id)?.name ?? null,
+          chat: (id) => deps.db.getChat(id)?.title ?? null,
+        }));
         return true;
       }
       if (method === 'POST') {
@@ -2229,7 +2233,7 @@ export async function handleApi(
       if (modelProvider && !isConfigured(modelProvider)) model = null;
       try {
         const run = taskAction[2] === 'run'
-          ? startTaskRun(deps, taskId, model)
+          ? startTaskRun(deps, taskId, model, (body as Record<string, unknown>)?.single === true)
           : startTaskPlan(deps, taskId, model);
         sendJson(res, 200, run);
       } catch (exc) {

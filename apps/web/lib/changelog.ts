@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.9',
+    date: '2026-10-10',
+    items: [
+      'Stop really stops: the model request, a running CLI and the tool loop are cut off at once; the files already changed stay',
+      'Loop guard: the same tool call 3 times gets a warning, 5 times ends the run with a summary',
+      'Write while the agent works: the message reaches the running task at its next step instead of waiting for the end',
+      'Switching the model, context size or effort during a run applies from the next step',
+      'Runs keep going when you switch projects or chats; coming back shows the live answer again; different chats run side by side',
+      'Agents: who started each run (Agents tab, task step, chat) and in which project, an "all projects" view, what it did (files, commands, tool calls) and its answer formatted like the chat',
+      'Tasks: "run the next stage only" for step-by-step work; every model sees the task list and "do the remaining ones" works through it',
+      'Project composition: every app in the folder (Laravel, Next.js, React, Django, FastAPI, Go, Java, .NET…) with its ports, Docker files, needed services and .env settings (secrets hidden), plus port conflicts',
+      'Whole-stack start: hybrid (databases in Docker, apps local), local or docker; the Preview starts the full stack of a multi-app folder; Dockerfiles and compose files the AI writes must cover every app',
+    ],
+  },
+  {
     version: '0.1.8',
     date: '2026-10-05',
     items: [

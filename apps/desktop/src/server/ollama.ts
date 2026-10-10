@@ -260,6 +260,8 @@ export interface GenerateResponseOptions {
   onPlanTask?: (title: string, steps: string[]) => void;
   /** Extra rules appended to the system prompt (task runner: "do only step N"). */
   extraSystem?: string;
+  /** The project's task list and how to treat "do the remaining ones" (tasknote.ts). */
+  tasksNote?: string;
   /** Called after each tool runs (for agent activity logs). */
   /** A cloud model failed and the run continues on another one (the UI follows). */
   onModelSwitch?: (model: string) => void;
@@ -281,6 +283,18 @@ export interface GenerateResponseOptions {
   guardWrite?: (tool: string, path: string) => string | null;
   /** A person is watching (the chat): `run_command` may ask them; otherwise only auto mode runs commands. */
   interactive?: boolean;
+  /** Stops the run (the chat's Stop button): the model request and a running CLI are cut off. */
+  signal?: AbortSignal;
+  /** The live run: messages the user typed meanwhile, a model / context / effort switch (chatruns.ts). */
+  control?: RunControl;
+}
+
+/** What the chat can change while a run is going; read between the model's steps. */
+export interface RunControl {
+  /** Messages typed while the agent works (clarifications); each is taken once. */
+  takeMessages(): string[];
+  /** A model / context / effort picked in the chat during the run; taken once. */
+  takeOverrides(): { model?: string; numCtx?: number; effort?: string } | null;
 }
 
 /** Raised for transport problems (mirrors `httpx.HTTPError`). */
@@ -863,7 +877,7 @@ async function runPreviewTool(root: string, name: string, args: unknown): Promis
 }
 
 /** `_workspace_tools()` — tool specs sent to Ollama when tools are enabled. */
-type OttoDockerAction = 'status' | 'validate' | 'up' | 'down' | 'runtime-up' | 'runtime-down' | 'service-start' | 'service-stop' | 'service-restart' | 'service-logs';
+export type OttoDockerAction = 'status' | 'validate' | 'up' | 'down' | 'runtime-up' | 'runtime-down' | 'service-start' | 'service-stop' | 'service-restart' | 'service-logs';
 
 interface DockerPlan { actions: Array<{ action: OttoDockerAction; service?: string }>; error?: string }
 
@@ -905,7 +919,7 @@ function dockerComposePlan(command: string): DockerPlan | null {
   }
 }
 
-async function callOttoDocker(projectId: number | null, action: OttoDockerAction, service?: string): Promise<string> {
+export async function callOttoDocker(projectId: number | null, action: OttoDockerAction, service?: string): Promise<string> {
   const base = process.env.OTTO_INTERNAL_API_URL;
   if (!base) return 'Otto local Services API is unavailable. Restart Otto and try again.';
   try {
@@ -1391,8 +1405,12 @@ function systemChunk(
 }
 
 /** Read an NDJSON response body line by line (httpx `aiter_lines()` port). */
-async function* readLines(response: Response): AsyncGenerator<string> {
+async function* readLines(response: Response, signal?: AbortSignal): AsyncGenerator<string> {
   const reader = response.body!.getReader();
+  // Stop: cancel the body so the pending read() returns at once
+  const onAbort = (): void => { void reader.cancel().catch(() => undefined); };
+  if (signal?.aborted) onAbort();
+  signal?.addEventListener('abort', onAbort, { once: true });
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
   for (;;) {
@@ -1403,7 +1421,7 @@ async function* readLines(response: Response): AsyncGenerator<string> {
     } catch (exc) {
       throw new OllamaConnectionError(errorMessage(exc));
     }
-    if (done) break;
+    if (done || signal?.aborted) break;
     buffer += decoder.decode(value, { stream: true });
     let index = buffer.indexOf('\n');
     while (index >= 0) {
@@ -1418,12 +1436,26 @@ async function* readLines(response: Response): AsyncGenerator<string> {
   if (buffer.length) yield buffer;
 }
 
+/** Thrown when the user stopped the run. */
+class RunStopped extends Error {}
+
+/** Waits for `work` unless the run is stopped first. */
+function untilAborted<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return work;
+  if (signal.aborted) return Promise.reject(new RunStopped('stopped'));
+  return new Promise<T>((resolve, reject) => {
+    const stop = (): void => reject(new RunStopped('stopped'));
+    signal.addEventListener('abort', stop, { once: true });
+    work.then((v) => { signal.removeEventListener('abort', stop); resolve(v); }, (e) => { signal.removeEventListener('abort', stop); reject(e); });
+  });
+}
+
 /** POST /api/chat — one step of the tool loop. */
-async function postChat(payload: unknown): Promise<Response> {
+async function postChat(payload: unknown, signal?: AbortSignal): Promise<Response> {
   const model = (payload as { model?: unknown } | null)?.model;
   if (typeof model === 'string' && providerForModel(model)) {
     try {
-      return await providerChat(payload as Parameters<typeof providerChat>[0]);
+      return await untilAborted(providerChat(payload as Parameters<typeof providerChat>[0]), signal);
     } catch (exc) {
       throw new OllamaConnectionError(errorMessage(exc));
     }
@@ -1443,6 +1475,7 @@ async function postChat(payload: unknown): Promise<Response> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       dispatcher: patientAgent,
+      signal,
     })) as unknown as Response;
   } catch (exc) {
     throw new OllamaConnectionError(errorMessage(exc));
@@ -1719,6 +1752,7 @@ export async function* generateResponse(
       systemNote: [
         'You are working inside zeithub.otto, an IDE, in the project folder. Answer in the language of the user.',
         options.extraSystem ?? '',
+        options.tasksNote ?? '',
         skillsPrompt(enabledSkills(root, profileKey(options.projectId, options.model)), prompt, false),
         edits ? '' : 'Read-only session: do not change files; explain what to change instead.',
         codexBridge.url ? OTTO_GUIDE + '\nThese tools are on the MCP server "otto". For Docker services, servers and the Preview use them rather than your own shell.' : '',
@@ -1726,6 +1760,7 @@ export async function* generateResponse(
       ].filter(Boolean).join('\n'),
     });
     codexRun = run;
+    options.signal?.addEventListener('abort', () => run.stop(), { once: true });
     let text = '';
     let failed = '';
     const started = new Map<string, Array<{ tool: string; target: string; actId: string; before: string | null }>>();
@@ -1865,6 +1900,7 @@ export async function* generateResponse(
       systemNote: [
         'You are working inside zeithub.otto, an IDE. Answer in the language of the user.',
         options.extraSystem ?? '',
+        options.tasksNote ?? '',
         skillsPrompt(enabledSkills(root, profileKey(options.projectId, options.model)), prompt, false),
         bridge.url ? OTTO_GUIDE.replace(/\b(otto_\w+|ssh_\w+|run_command)\b/g, 'mcp__otto__$1') : '',
         bridge.url && connectorsNote() ? connectorsNote().replace(/\b(connector_tools|connector_call)\b/g, 'mcp__otto__$1') : '',
@@ -1874,6 +1910,7 @@ export async function* generateResponse(
       ].filter(Boolean).join('\n'),
     });
     cliRun = run;
+    options.signal?.addEventListener('abort', () => run.stop(), { once: true });
     let text = '';
     let cliModel = '';
     const pending = new Map<string, { tool: string; target: string; actId: string; before: string | null; input: Record<string, unknown> }>();
@@ -2116,6 +2153,7 @@ ${webRules}Порядок работы:
   if (toolsEnabled) systemContent += '\n\n' + OTTO_GUIDE;
   if (toolsEnabled && connectorsNote()) systemContent += '\n\n' + connectorsNote();
   if (options.extraSystem) systemContent +='\n\n' + options.extraSystem;
+  if (toolsEnabled && options.tasksNote) systemContent += '\n\n' + options.tasksNote;
   const messages: Message[] = [
     { role: 'system', content: systemContent },
     ...historyMessages,
@@ -2301,7 +2339,38 @@ ${webRules}Порядок работы:
 
   try {
     const stepLimit = maxToolSteps();
-    for (let step = 0; step < stepLimit; step++) {
+    // the same tool call over and over = a loop: warned at 3, the run is wrapped up at 5
+    const callCounts = new Map<string, number>();
+    let looping = false;
+    for (let step = 0; step < stepLimit && !looping; step++) {
+      if (options.signal?.aborted) throw new RunStopped('stopped');
+      // what the user typed while the agent was working: part of the task from now on
+      for (const note of options.control?.takeMessages() ?? []) {
+        messages.push({ role: 'user', content: `Сообщение пользователя во время работы (учти его сразу, задача продолжается): ${note}` });
+        accumulated += `${accumulated ? '\n\n' : ''}💬 ${note.length > 120 ? `${note.slice(0, 120)}…` : note}`;
+      }
+      const ov = options.control?.takeOverrides();
+      if (ov?.numCtx && ov.numCtx >= 2048) sampling = { ...sampling, num_ctx: ov.numCtx };
+      if (ov?.effort) effort = ['auto', 'off', 'low', 'medium', 'high', 'max'].includes(ov.effort) ? ov.effort : effort;
+      if (ov?.model && ov.model !== activeModel) {
+        const sameKind = !isCodexModel(ov.model) && !isCliModel(ov.model) && Boolean(providerForModel(ov.model)) === Boolean(providerForModel(activeModel));
+        const line = `🔄 ${activeModel} → ${ov.model}`;
+        if (sameKind && !guided) {
+          // same kind of model: the conversation so far goes on with the new one
+          activeModel = ov.model;
+          accumulated += `${accumulated ? '\n\n' : ''}${line}`;
+          options.onModelSwitch?.(ov.model);
+        } else {
+          // another kind (local ↔ cloud, CLI): a fresh run that knows the work already done is in the files
+          yield* generateResponse({
+            ...options,
+            model: ov.model,
+            leadNotice: [accumulated, line].filter(Boolean).join('\n\n'),
+            prompt: `${options.prompt}\n\n(Часть работы уже сделана предыдущей моделью — проверь файлы проекта и продолжай с того места.)`,
+          });
+          return;
+        }
+      }
       const ctxTokens = providerForModel(activeModel) ? 65536 : typeof sampling.num_ctx === 'number' ? sampling.num_ctx : 8192;
       readLimit = readLimitChars(ctxTokens);
       const compacted = compactMessages(messages, ctxTokens);
@@ -2325,7 +2394,7 @@ ${webRules}Порядок работы:
         );
       }
 
-      const response = await postChat(payload);
+      const response = await postChat(payload, options.signal);
       if (response.status !== 200) {
         const detail = await response.text();
         // Model doesn't support the native tools API → retry without it.
@@ -2374,7 +2443,7 @@ ${webRules}Порядок работы:
       let hadError = false;
       const splitter = new ThinkSplitter();
       let turnThinkingBlocks: Array<{ thinking: string; signature: string }> = [];
-      for await (const line of readLines(response)) {
+      for await (const line of readLines(response, options.signal)) {
         if (!line.trim()) continue;
         let chunk: Record<string, any>;
         try {
@@ -2463,6 +2532,7 @@ ${webRules}Порядок работы:
         }
       }
 
+      if (options.signal?.aborted) throw new RunStopped('stopped');
       if (hadError) continue;
       // this turn is over: fold the reasoning block (it reopens if the next turn thinks again)
       if (thinking) yield thinkingChunk(thinking, thinkId, ts, pid, false);
@@ -2606,6 +2676,23 @@ ${webRules}Порядок работы:
         const argsObj = (fn.arguments && typeof fn.arguments === 'object' ? fn.arguments : {}) as Record<string, unknown>;
         const paths = activityPaths(fn.arguments);
         const actId = `act-${msgId}-${step}-${i}`;
+        if (options.signal?.aborted) throw new RunStopped('stopped');
+        const loopKey = `${name}:${JSON.stringify(argsObj)}`;
+        const repeats = (callCounts.get(loopKey) ?? 0) + 1;
+        callCounts.set(loopKey, repeats);
+        if (repeats >= 3) {
+          const note = repeats >= 5
+            ? 'LOOP: this exact call was made 5 times. The run is being wrapped up — give the final answer from what you have.'
+            : `LOOP WARNING: this exact call (${name}) was already made ${repeats - 1} times with the same arguments and gives the same result. Do NOT call it again: change the approach, or finish with an answer.`;
+          messages.push({ role: 'tool', tool_name: name, content: note });
+          options.onToolEvent?.(name, fn.arguments, note);
+          if (repeats >= 5) {
+            looping = true;
+            accumulated += `${accumulated ? '\n\n' : ''}${/[а-яё]/i.test(options.prompt) ? '⚠️ Модель зациклилась (один и тот же вызов 5 раз) — работа остановлена, ниже итог.' : '⚠️ The model was looping (the same call 5 times): stopped, summary below.'}`;
+            break;
+          }
+          continue;
+        }
         if (name !== 'run_command') yield activity('tool_start', name, paths, actId);
         let result: string;
         const extTool = sshTools.find((t) => t.name === name) ?? connectorTools().find((t) => t.name === name) ?? appTools(null).find((t) => t.name === name);
@@ -2786,10 +2873,11 @@ ${webRules}Порядок работы:
         ...messages,
         { role: 'user', content: 'Заверши ответ на основе уже собранной информации. Не вызывай инструменты, дай итог.' },
       ];
-      const finalResp = await postChat({ model: activeModel, messages: finalMessages, stream: true, options: sampling });
+      if (options.signal?.aborted) throw new RunStopped('stopped');
+      const finalResp = await postChat({ model: activeModel, messages: finalMessages, stream: true, options: sampling }, options.signal);
       if (finalResp.status === 200) {
         const parts: string[] = [];
-        for await (const line of readLines(finalResp)) {
+        for await (const line of readLines(finalResp, options.signal)) {
           if (!line.trim()) continue;
           let chunk: Record<string, any>;
           try { chunk = JSON.parse(line) as Record<string, any>; } catch { continue; }
@@ -2806,13 +2894,20 @@ ${webRules}Порядок работы:
         yield assistantChunk(finalText, msgId, ts, pid, false, toolsEnabled, changes.marker());
         return;
       }
-    } catch { /* fall through to note */ }
+    } catch (exc) { if (exc instanceof RunStopped || options.signal?.aborted) throw new RunStopped('stopped'); /* fall through to note */ }
     const fallback = (
       accumulated + '\n\n' + notice('stepLimit', options.prompt)
     ).replace(/^\s+/, '');
     if (thinking) yield thinkingChunk(thinking, thinkId, ts, pid, false);
     yield assistantChunk(fallback, msgId, ts, pid, false, toolsEnabled, changes.marker());
   } catch (exc) {
+    // Stop: what was done stays (files, the change list), the bubble says it was stopped
+    if (exc instanceof RunStopped || options.signal?.aborted) {
+      if (thinking) yield thinkingChunk(thinking, thinkId, ts, pid, false);
+      const ru = /[а-яё]/i.test(options.prompt);
+      yield assistantChunk(`${accumulated ? `${accumulated}\n\n` : ''}⏹ ${ru ? 'Остановлено.' : 'Stopped.'}`, msgId, ts, pid, false, toolsEnabled, changes.marker());
+      return;
+    }
     if (exc instanceof OllamaConnectionError) {
       yield err(`Ошибка соединения с ${providerForModel(activeModel)?.name ?? 'Ollama'}: ${exc.message}`);
       return;

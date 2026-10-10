@@ -109,10 +109,10 @@ export function useTasks(projectId?: number) {
     void patch(step.id, { parallel: !step.parallel });
   }, [patch]);
 
-  const start = useCallback(async (taskId: number, action: 'run' | 'plan') => {
+  const start = useCallback(async (taskId: number, action: 'run' | 'plan', single = false) => {
     setError(null);
     try {
-      const run = await startTaskAction(taskId, action);
+      const run = await startTaskAction(taskId, action, undefined, single);
       setRuns((prev) => [...prev.filter((r) => r.taskId !== taskId), run]);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc));
@@ -128,6 +128,8 @@ export function useTasks(projectId?: number) {
     tasks, stepsOf, runOf, loading, error, busy,
     add, addStep, patch, remove, cycleStatus, toggleStep, toggleParallel,
     run: (id: number) => start(id, 'run'),
+    /** Step by step: only the next stage, then the run stops and waits. */
+    runNext: (id: number) => start(id, 'run', true),
     plan: (id: number) => start(id, 'plan'),
     stop,
     reload: load,
