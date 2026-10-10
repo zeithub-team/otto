@@ -75,3 +75,18 @@ test('a chat run: viewers get chunks, messages and switches reach the agent, sto
   assert.equal(activeRun(991), undefined);
   assert.ok(!injectMessage(991, 'late'));
 });
+
+test('model roles: plans and audits go to the planner, work to the coder', async () => {
+  const { roleFor, wantsExecution, applyRole } = await import('../roles');
+  assert.equal(roleFor('создай задачи для лендинга'), 'planner');
+  assert.equal(roleFor('сделай аудит проекта и исправь'), 'planner');
+  assert.equal(roleFor('Audit the API'), 'planner');
+  assert.equal(roleFor('исправь кнопку в шапке'), 'coder');
+  assert.equal(roleFor('привет'), null);
+  assert.ok(wantsExecution('сделай аудит и исправь'));
+  assert.ok(!wantsExecution('сделай аудит'));
+  const p = applyRole('planner', 'claude/sonnet', null, true);
+  assert.equal(p.model, 'claude/sonnet');
+  assert.equal(p.effort, 'high');
+  assert.equal(applyRole('coder', 'claude/sonnet', null).effort, 'low');
+});

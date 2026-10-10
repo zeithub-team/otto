@@ -15,6 +15,7 @@ import { isDirectory, resolvePath } from './paths';
 import { listChatRuns, stopRun as stopChatRun } from './chatruns';
 import { stripChangesMarker } from './changes';
 import { tasksNote } from './tasknote';
+import { applyRole, roleFor } from './roles';
 
 export type AgentStatus = 'running' | 'done' | 'error' | 'stopped';
 
@@ -216,15 +217,18 @@ export function startAgent(
   }
 
   const now = Date.now();
+  // model roles: a plan / audit on the planner, work on the coder
+  const role = roleFor(opts.prompt);
+  const pick = role ? applyRole(role, opts.model ?? null, null, /[а-яё]/i.test(opts.prompt)) : { model: opts.model ?? null, effort: null, label: '' };
   const run: AgentRun = {
     id: randomUUID(),
     projectId: opts.projectId,
     title: (opts.title || opts.prompt).slice(0, 80),
     prompt: opts.prompt,
-    model: opts.model ?? null,
+    model: pick.model,
     status: 'running',
     content: '',
-    log: [{ ts: now, kind: 'note', text: 'Агент запущен' }],
+    log: [{ ts: now, kind: 'note', text: pick.label ? `Агент запущен · ${pick.label}` : 'Агент запущен' }],
     error: null,
     createdAt: now,
     updatedAt: now,
@@ -245,7 +249,8 @@ export function startAgent(
         messageId: run.id,
         projectId: opts.projectId,
         projectPath,
-        model: opts.model ?? null,
+        model: pick.model,
+        effort: pick.effort,
         useTools: true,
         useContext: true,
         signal: run.abort!.signal,

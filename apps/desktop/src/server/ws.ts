@@ -23,6 +23,8 @@ import { generateResponse } from './ollama';
 import { parseStep } from './steps';
 import { isDirectory, resolvePath } from './paths';
 import { tasksNote } from './tasknote';
+import { applyRole, roleFor, roleOrChat, wantsExecution } from './roles';
+import { startTaskRun } from './taskrunner';
 import { activeRun, beginRun, controlOf, emit, endRun, injectMessage, stopRun, updateRun } from './chatruns';
 import {
   interruptTerminal,
@@ -145,11 +147,18 @@ async function handlePrompt(ws: WebSocket | null, messageData: ChatPayload, deps
     console.log(`[history] failed to save user msg: ${String(exc)}`);
   }
 
-  const run = beginRun({ chatId, projectId, messageId, prompt, model }, viewersOf(chatId));
+  // model roles: plans / audits go to the planner, work to the coder (Settings → Models → Model roles)
+  const ru = /[а-яё]/i.test(prompt);
+  const role = useTools === false ? null : roleFor(prompt);
+  const chatEffort = typeof messageData.effort === 'string' ? messageData.effort : null;
+  const pick = role ? applyRole(role, model, chatEffort, ru) : { model, effort: chatEffort, label: '' };
+  const run = beginRun({ chatId, projectId, messageId, prompt, model: pick.model }, viewersOf(chatId));
   const send = (chunk: string): void => emit(run, chunk);
   send(runState(chatId, true, { model, started_at: run.startedAt, prompt: prompt.slice(0, 200) }));
 
   const toolEvents: { name: string; args: unknown; result: string }[] = [];
+  /** The task the planner made in this run (the coder may carry it out right after). */
+  let planned: number | null = null;
   const stream = generateResponse({
     prompt,
     messageId,
@@ -157,11 +166,12 @@ async function handlePrompt(ws: WebSocket | null, messageData: ChatPayload, deps
     projectPath,
     history,
     images,
-    model,
+    model: pick.model,
     useTools,
     useContext,
     useWeb,
-    effort: typeof messageData.effort === 'string' ? messageData.effort : null,
+    effort: pick.effort,
+    leadNotice: pick.label || undefined,
     numCtx: typeof messageData.num_ctx === 'number' ? messageData.num_ctx : null,
     temperature: typeof messageData.temperature === 'number' ? messageData.temperature : null,
     // a person is in the chat: run_command can ask them before running anything
@@ -180,6 +190,7 @@ async function handlePrompt(ws: WebSocket | null, messageData: ChatPayload, deps
     onPlanTask: (title, steps) => {
       try {
         const parent = deps.db.createTask(projectId, title, '', 'agent');
+        planned = parent.id;
         for (const raw of steps) {
           const step = parseStep(raw);
           deps.db.createTask(projectId, step.title, '', 'agent', parent.id, step.parallel);
@@ -273,6 +284,23 @@ async function handlePrompt(ws: WebSocket | null, messageData: ChatPayload, deps
     persist();
     endRun(run);
     send(runState(chatId, false, { model: run.model }));
+  }
+  // "audit and fix", "make tasks and do them": the coder runs the plan stage by stage (task board, Agents tab)
+  if (role === 'planner' && planned !== null && wantsExecution(prompt) && !run.controller.signal.aborted) {
+    try {
+      const coder = roleOrChat('coder', model, chatEffort);
+      startTaskRun(deps, planned, coder.model);
+      const note = JSON.stringify({
+        role: 'assistant', id: `chain-${messageId}`, timestamp: Math.floor(Date.now() / 1000), projectId, isStreaming: false,
+        content: ru
+          ? `🔧 План передан исполнителю${coder.model ? ` (${coder.model})` : ''}: этапы выполняются по очереди — прогресс в панели задач и во вкладке «Агенты».`
+          : `🔧 The plan went to the coder${coder.model ? ` (${coder.model})` : ''}: its stages run one by one — progress in the task panel and the Agents tab.`,
+      });
+      for (const l of viewersOf(chatId)) l(note);
+      for (const l of viewersOf(chatId)) l(JSON.stringify({ role: 'ui', action: 'tasks-changed' }));
+    } catch (exc) {
+      console.log(`[roles] chain failed: ${String(exc)}`);
+    }
   }
   // messages typed meanwhile that the agent never read (a CLI model, or the run ended first): the next prompt
   const left = run.inbox.splice(0);

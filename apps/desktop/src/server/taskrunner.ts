@@ -12,6 +12,7 @@ import type { Db, TaskRow } from './db';
 import { generateResponse } from './ollama';
 import { isDirectory, resolvePath } from './paths';
 import { registerRun } from './agents';
+import { roleOrChat } from './roles';
 import { FileClaims, PARALLEL_RULES, nextGroup, parseStep } from './steps';
 
 export type RunStatus = 'planning' | 'running' | 'done' | 'error' | 'stopped';
@@ -99,6 +100,8 @@ async function drive(
     /** Name of the run in the Agents tab, and what stopping it there does to the task run. */
     title: string;
     taskId: number;
+    /** Reasoning effort of the role (planner: high, coder: low by default). */
+    effort?: string | null;
     onStopAll?: () => void;
     /** Live status: 'start' when the agent begins, then the tool it just used and the file it touched. */
     onActivity?: (tool: string, path?: string) => void;
@@ -121,6 +124,7 @@ async function drive(
     useTools: true,
     useContext: true,
     extraSystem: opts.extraSystem,
+    effort: opts.effort ?? null,
     signal: abort.signal,
     onPlanTask: opts.onPlanTask,
     guardWrite: opts.guardWrite,
@@ -193,7 +197,9 @@ const STEP_RULES =
  * Run the unfinished steps of a task in order. Returns immediately.
  * `single`: only the next stage (or parallel group), then stop — step-by-step mode from the task board.
  */
-export function startTaskRun(deps: Deps, taskId: number, model: string | null = null, single = false): TaskRun {
+export function startTaskRun(deps: Deps, taskId: number, chatModel: string | null = null, single = false): TaskRun {
+  // the steps are the coder's work (Settings → Models → Model roles)
+  const { model, effort } = roleOrChat('coder', chatModel);
   const task = deps.db.getTask(taskId);
   if (!task || task.parent_id !== null) throw new Error('Task not found');
   if (isActive(runs.get(taskId))) return view(runs.get(taskId)!);
@@ -258,6 +264,7 @@ export function startTaskRun(deps: Deps, taskId: number, model: string | null = 
               model,
               messageId: `task-${taskId}-${step.id}-${n}`,
               taskId,
+              effort,
               isStopped: () => run.stopped,
               isPaused: () => run.paused,
               title: `Задача «${task.title}» · этап ${steps.indexOf(step) + 1}: ${step.title}`,
@@ -353,7 +360,9 @@ export function parseListPlan(text: string): string[] {
 }
 
 /** Ask the model to break a task into checklist steps (attached to `taskId`). */
-export function startTaskPlan(deps: Deps, taskId: number, model: string | null = null): TaskRun {
+export function startTaskPlan(deps: Deps, taskId: number, chatModel: string | null = null): TaskRun {
+  // planning is the planner's work
+  const { model, effort } = roleOrChat('planner', chatModel);
   const task = deps.db.getTask(taskId);
   if (!task || task.parent_id !== null) throw new Error('Task not found');
   if (isActive(runs.get(taskId))) return view(runs.get(taskId)!);
@@ -390,6 +399,7 @@ export function startTaskPlan(deps: Deps, taskId: number, model: string | null =
         model,
         messageId: `plan-${taskId}`,
         taskId,
+        effort,
         isStopped: () => run.stopped,
         isPaused: () => run.paused,
         title: `План задачи «${task.title}»`,
@@ -418,6 +428,7 @@ export function startTaskPlan(deps: Deps, taskId: number, model: string | null =
             model,
             messageId: `plan2-${taskId}`,
             taskId,
+            effort,
             isStopped: () => run.stopped,
             isPaused: () => run.paused,
             title: `План задачи «${task.title}»`,

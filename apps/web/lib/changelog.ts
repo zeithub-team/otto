@@ -21,6 +21,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Agents: who started each run (Agents tab, task step, chat) and in which project, an "all projects" view, what it did (files, commands, tool calls) and its answer formatted like the chat',
       'Tasks: "run the next stage only" for step-by-step work; every model sees the task list and "do the remaining ones" works through it',
       'Project composition: every app in the folder (Laravel, Next.js, React, Django, FastAPI, Go, Java, .NET…) with its ports, Docker files, needed services and .env settings (secrets hidden), plus port conflicts',
+      'Model roles (Settings → Models): plans, task lists and audits go to the planner, code to the coder; ready schemes — same model thinking on high and working on low, strong local planner + fast local coder, cloud planner + local coder; "audit and fix" runs the plan right away',
       'Whole-stack start: hybrid (databases in Docker, apps local), local or docker; the Preview starts the full stack of a multi-app folder; Dockerfiles and compose files the AI writes must cover every app',
     ],
   },
