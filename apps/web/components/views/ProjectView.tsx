@@ -84,6 +84,8 @@ export function ProjectView({ projectId, navRequest }: ProjectViewProps) {
   const [nav, setNav] = useState<NavInfo | null>(null);
   const [navLoading, setNavLoading] = useState(false);
   const [gotoLine, setGotoLine] = useState<number | undefined>(undefined);
+  // bumps on every jump request, so the same line can be requested twice
+  const [gotoSeq, setGotoSeq] = useState(0);
   // Go to symbol popup (Ctrl+Shift+O): classes, methods, functions.
   const [symOpen, setSymOpen] = useState(false);
   const [symQuery, setSymQuery] = useState('');
@@ -499,6 +501,7 @@ export function ProjectView({ projectId, navRequest }: ProjectViewProps) {
     if (saving || !(await confirmDiscard())) return;
     setSaveError(null);
     setGotoLine(line);
+    setGotoSeq((n) => n + 1);
     setTabEntries((prev) => ({ ...prev, [item.path]: item }));
     setOpenTabs((prev) => prev.includes(item.path) ? prev : [...prev, item.path]);
     if (Object.prototype.hasOwnProperty.call(savedContents, item.path)) {
@@ -971,6 +974,7 @@ export function ProjectView({ projectId, navRequest }: ProjectViewProps) {
                     path={selectedFile}
                     value={editorContent}
                     gotoLine={gotoLine}
+                    gotoSeq={gotoSeq}
                     onChange={(value) => setDrafts((prev) => ({ ...prev, [selectedFile]: value }))}
                     definitionContext={projectId ? { projectId } : undefined}
                     onJumpToFile={(p, line) => void openFile({ path: p, name: p.split('/').pop() ?? p, is_dir: false, type: 'code', size: 0 }, line)}

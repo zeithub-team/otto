@@ -23,6 +23,8 @@ interface CodeEditorProps {
   onChange: (value: string) => void;
   /** 1-based line to scroll to and place the caret on (e.g. a route's method). */
   gotoLine?: number;
+  /** Changes with every jump request (the same line may be asked for again). */
+  gotoSeq?: number;
   /** Project context enabling completion and Ctrl+Click go-to-definition. */
   definitionContext?: { projectId: number };
   /** Jump to a file:line (wired to the explorer's openFile). */
@@ -114,7 +116,7 @@ const RU_PHRASES: Record<string, string> = {
   'Completions': 'Варианты', 'Selection deleted': 'Выделение удалено',
 };
 
-export function CodeEditor({ path, value, onChange, gotoLine, definitionContext, onJumpToFile }: CodeEditorProps) {
+export function CodeEditor({ path, value, onChange, gotoLine, gotoSeq, definitionContext, onJumpToFile }: CodeEditorProps) {
   const { t, locale } = useT();
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -294,14 +296,21 @@ export function CodeEditor({ path, value, onChange, gotoLine, definitionContext,
     lastEmitted.current = value;
   }, [value]);
 
-  // Jump to a requested line (route → method navigation, definitions, search results)
+  // Jump to a requested line (route → method navigation, definitions, search results) ONCE per request:
+  // re-running it on every edit threw the caret back to that line after each Enter or keystroke.
+  // `value` stays a dependency only to wait for the file's text when it arrives after the request.
+  const jumped = useRef('');
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !gotoLine || gotoLine < 1) return;
+    const key = `${path}:${gotoLine}:${gotoSeq ?? 0}`;
+    if (jumped.current === key) return;
+    if (gotoLine > view.state.doc.lines && !value) return; // the text is not loaded yet
+    jumped.current = key;
     const line = view.state.doc.line(Math.min(gotoLine, view.state.doc.lines));
     view.dispatch({ selection: EditorSelection.cursor(line.from), effects: EditorView.scrollIntoView(line.from, { y: 'center' }) });
     view.focus();
-  }, [gotoLine, path, value]);
+  }, [gotoLine, gotoSeq, path, value]);
 
   useEffect(() => {
     viewRef.current?.dispatch({ effects: wrapComp.current.reconfigure(wrap ? EditorView.lineWrapping : []) });
