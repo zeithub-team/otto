@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.10',
+    date: '2026-10-12',
+    items: [
+      'Editor: after opening a file at a line (routes, search, go to definition) the caret no longer jumps back to that line on every Enter or keystroke',
+      'macOS builds (Apple Silicon and Intel) attached to every release',
+      'macOS: tools install through Homebrew, and the app finds node, git and the AI CLIs from the user’s shell PATH',
+    ],
+  },
+  {
     version: '0.1.8',
     date: '2026-10-05',
     items: [
