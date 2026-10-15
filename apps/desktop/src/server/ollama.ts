@@ -1580,6 +1580,8 @@ ${webRules}Порядок работы:
   // and keep going — the text tool-call parser still lets the model use tools.
   let sendTools = toolsEnabled;
   let runnerCrashRetries = 0;
+  // a local model that started repeating itself (Ollama aborts it: "token repeat limit reached")
+  let repeatRetries = 0;
   // reasoning effort of this run (the Settings default unless the chat picked one)
   const EFFORTS = ['auto', 'off', 'low', 'medium', 'high', 'max'];
   const wantedEffort = String(options.effort || live<string>('agent.effort') || 'auto').toLowerCase();
@@ -1763,6 +1765,19 @@ ${webRules}Порядок работы:
         }
         if (chunk.error) {
           const raw = typeof chunk.error === 'string' ? chunk.error : JSON.stringify(chunk.error);
+          // the model fell into repeating the same tokens: not a broken setup, just a bad roll — ask the
+          // same turn again with livelier sampling (the half-written turn is dropped)
+          if (/repeat limit|repetition/i.test(raw) && repeatRetries < 2) {
+            repeatRetries++;
+            sampling = {
+              ...sampling,
+              temperature: Math.min(1, (Number(sampling.temperature) || 0.2) + 0.3),
+              repeat_penalty: Math.max(Number(sampling.repeat_penalty) || 1.1, 1.2) + 0.05 * repeatRetries,
+            };
+            console.warn(`[agent] ${activeModel} repeated itself, retry ${repeatRetries} with temperature ${sampling.temperature}`);
+            hadError = true;
+            break;
+          }
           if (!contentParts.length && !toolCalls.length && (await recoverCloud(/не ответила за/.test(raw) ? 504 : 400, raw))) {
             hadError = true;
             break;

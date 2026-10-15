@@ -142,3 +142,20 @@ test('a model reading the same file over and over is stopped early with a plain 
     await new Promise<void>((r) => server.close(() => r()));
   }
 });
+
+test('a model that falls into repeating itself is asked again instead of failing the run', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'otto-rep-'));
+  const ollama = await fake([
+    [{ message: { role: 'assistant', content: 'the the the' }, done: false }, { error: 'prediction aborted, token repeat limit reached' }],
+    [{ message: { role: 'assistant', content: 'Готово.' }, done: false }, { message: { role: 'assistant', content: '' }, done: true }],
+  ]);
+  try {
+    const chunks = await run(root);
+    const final = chunks[chunks.length - 1];
+    assert.equal(final.role, 'assistant');
+    assert.match(final.content, /Готово/);
+    assert.ok(!chunks.some((c) => c.isError));
+  } finally {
+    await ollama.close();
+  }
+});
