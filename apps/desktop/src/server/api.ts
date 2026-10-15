@@ -47,6 +47,7 @@ import {
 } from './filesearch';
 import { findDefinition } from './symbols';
 import { getIndex } from './projectindex';
+import { restoreCheckpoint } from './checkpoints';
 import { envStatus as envFileStatus, findEnvExample, servicesToEnv, syncEnvFile, type ServiceInstance } from './envfile';
 import {
   errorMessage,
@@ -208,6 +209,7 @@ const ROUTES: RouteSpec[] = [
   { path: '/api/git/clone', methods: ['POST'] },
   { path: '/api/services/docker', methods: ['POST'] },
   { path: '/api/services/summary', methods: ['GET'] },
+  { path: '/api/checkpoints/restore', methods: ['POST'] },
   { path: '/api/connectors/tabby/open', methods: ['POST'] },
   { path: '/api/connectors', methods: ['GET'] },
   { path: '/api/connectors/save', methods: ['POST'] },
@@ -1136,6 +1138,19 @@ export async function handleApi(
         res.write(JSON.stringify({ done: true, code: code || 1 }) + '\n');
       }
       if (!res.writableEnded) res.end();
+      return true;
+    }
+
+    // undo an agent run: its files go back to what they were before it (the changes card in the chat)
+    if (pathname === '/api/checkpoints/restore') {
+      if (method !== 'POST') return false;
+      const body = await readJsonBody(req);
+      const fields = validateBody(body, [{ name: 'project_id', kind: 'int' }, { name: 'run', kind: 'string' }]);
+      const projectPath = deps.db.getProjectPath(Number(fields.project_id));
+      if (!projectPath || !isDirectory(projectPath)) throw new HttpError(404, 'Project folder not found');
+      const restored = restoreCheckpoint(projectPath, String(fields.run));
+      if (!restored) throw new HttpError(404, 'This run can no longer be undone (its checkpoint is gone).');
+      sendJson(res, 200, restored);
       return true;
     }
 

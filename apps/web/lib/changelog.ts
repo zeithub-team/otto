@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.11',
+    date: '2026-10-15',
+    items: [
+      'Agent: a change that would break a working file (JS, TS, JSON, CSS, inline scripts, Python and PHP when installed) is refused before it lands, with the exact lines to fix',
+      'Agent: a large file is not rewritten before the model has read it, and a rewrite that throws most of a file away has to be confirmed',
+      'Agent: every run can be undone — "Undo" on the files card puts the files back as they were before the answer',
+      'Agent: one loop watch for every model and mode — repeated calls are answered without running again, and a run that goes in circles is stopped with an honest summary instead of using up all its steps',
+      'Agent: existing files are edited in place (replace_in_file) instead of being rewritten whole; the reminder after each step no longer piles up in the context',
+    ],
+  },
+  {
     version: '0.1.10',
     date: '2026-10-12',
     items: [

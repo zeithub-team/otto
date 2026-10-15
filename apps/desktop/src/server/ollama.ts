@@ -11,7 +11,7 @@ import { Agent, fetch as undiciFetch } from 'undici';
 import { live } from './appconfig';
 import { refreshProcessPath } from './env';
 import { languageRule, notice } from './language';
-import { asFunctionTool, openBridge, sshTools, type AgentTool, type Approve } from './agentbridge';
+import { openBridge, sshTools, type AgentTool, type Approve } from './agentbridge';
 import { connectorTools, connectorsNote } from './connectors';
 import { appTools, localServerUrl, OTTO_GUIDE, routeAppCommand, wantsPreview, type AppToolContext } from './apptools';
 import { guidedSchema, guidedSystemPrompt, parseGuided, pickGuidedTools, toGuidedMessages, type ToolSpec } from './guided';
@@ -20,7 +20,12 @@ import { applyBaseStyle, CLASSLESS_CSS, designGaps, wantsSite } from './designki
 import { makePlan, planText, wantsPlan } from './planner';
 import { buildSite, ollamaChat, wantsMultiPageSite } from './sitebuilder';
 import { ChangeTracker, deltaTag, lineDelta, stripChangesMarker, ThinkSplitter } from './changes';
-import { compactMessages, readLimitChars, sliceFile } from './context';
+import { compactMessages, readLimitChars } from './context';
+import { EditSession, isFailure, LoopGuard, toolKind } from './runguard';
+import { Checkpoint } from './checkpoints';
+import { compareEntries, normalizeToolCall, READ_ONLY_TOOLS, runTool, safePath, setReadLimit, SHELL_NAME, strLen, workspaceTools } from './workspacetools';
+// (tests and other modules import these from here)
+export { normalizeToolCall, runTool, writeWarnings } from './workspacetools';
 import { enabledSkills, profileKey, readSkillFile, skillByName, skillFiles, skillsPrompt } from './skills';
 import { codexItemActivity, codexUsage, findCodex, isCodexModel, isNoAccessError, markCodexUnavailable, runCodex, usableCodexModels } from './codexcli';
 import { cliToolTarget, cliUsage, findClaude, isCliNoAccess, isCliModel, ottoToolName, rememberClaudeLimits, runClaudeCli, withHistory } from './claudecli';
@@ -32,8 +37,6 @@ import {
   errorMessage,
   isDirectory,
   isFile,
-  isInside,
-  relativePosix,
   resolvePath,
 } from './paths';
 
@@ -202,13 +205,6 @@ function humanizeOllamaError(status: number, detail: string, model: string): str
   return `Ollama ${status}: ${short || 'пустой ответ сервера'}`;
 }
 
-/** Python `len(str)` counts code points, not UTF-16 units. */
-function strLen(value: string): number {
-  let n = 0;
-  for (const _ of value) n++;
-  return n;
-}
-
 /** Python's `str()` for the flat structures used in DEBUG_OLLAMA logs. */
 function pyRepr(value: unknown): string {
   if (typeof value === 'number') return String(value);
@@ -222,18 +218,6 @@ function pyRepr(value: unknown): string {
     return `{${body}}`;
   }
   return String(value);
-}
-
-/** Sort helper: Python's `key=lambda p: (not p.is_dir(), p.name.lower())`. */
-function compareEntries(
-  a: { name: string; isDirectory(): boolean },
-  b: { name: string; isDirectory(): boolean },
-): number {
-  const dirFirst = Number(a.isDirectory() === false) - Number(b.isDirectory() === false);
-  if (dirFirst !== 0) return dirFirst;
-  const x = a.name.toLowerCase();
-  const y = b.name.toLowerCase();
-  return x < y ? -1 : x > y ? 1 : 0;
 }
 
 export interface GenerateResponseOptions {
@@ -317,24 +301,9 @@ type Message = {
 };
 
 const patientAgent = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
-const MAX_FILE_SIZE = 1_000_000;
-/** Cap for one read_file result; set per model window right before each tool call. */
-let readLimit = 12000;
 // Generous tool budget so the model can inspect many files before answering
 // (raising this avoids the premature "exceeded steps" failure).
 const maxToolSteps = (): number => live<number>('agent.maxSteps');
-const TOOL_SKIP_DIRS = new Set(['.git', '.next', 'node_modules', '.venv']);
-
-/** Read-only tools eligible for repeat short-circuiting in the agent loop. */
-const READ_ONLY_TOOLS = new Set([
-  'read_skill_file',
-  'list_files',
-  'read_file',
-  'read_files',
-  'search_files',
-  'web_search',
-  'fetch_url',
-]);
 const TREE_SKIP_DIRS = new Set([
   '.git',
   '.next',
@@ -348,432 +317,6 @@ const TREE_SKIP_DIRS = new Set([
   '.vscode',
 ]);
 
-/** `_safe_path()` — keep tool paths inside the project root. */
-function safePath(root: string, relativePath: string): string {
-  const target = resolvePath(path.resolve(root, relativePath ?? ''));
-  if (!isInside(root, target)) {
-    throw new Error('Path is outside the selected project');
-  }
-  return target;
-}
-
-/** Tool names models commonly invent → the real tool. */
-const TOOL_ALIASES: Record<string, string> = {
-  create_file: 'write_file',
-  edit_file: 'write_file',
-  write: 'write_file',
-  save_file: 'write_file',
-  overwrite_file: 'write_file',
-  str_replace: 'replace_in_file',
-  replace: 'replace_in_file',
-  replace_text: 'replace_in_file',
-  search_replace: 'replace_in_file',
-  read: 'read_file',
-  open_file: 'read_file',
-  cat: 'read_file',
-  ls: 'list_files',
-  list_dir: 'list_files',
-  list_directory: 'list_files',
-  grep: 'search_files',
-  search: 'search_files',
-  remove_file: 'delete_file',
-  search_web: 'web_search',
-  browse: 'fetch_url',
-  open_url: 'fetch_url',
-};
-
-/** Argument names models commonly use → the canonical ones. */
-const PARAM_ALIASES: Record<string, string> = {
-  file_path: 'path',
-  filepath: 'path',
-  filename: 'path',
-  file: 'path',
-  file_name: 'path',
-  old_str: 'find',
-  old_string: 'find',
-  old_text: 'find',
-  search_text: 'find',
-  new_str: 'replace',
-  new_string: 'replace',
-  new_text: 'replace',
-  replacement: 'replace',
-  directory: 'path',
-  dir: 'path',
-  text: 'content',
-  code: 'content',
-  contents: 'content',
-  file_content: 'content',
-  body: 'content',
-  q: 'query',
-  search: 'query',
-  pattern: 'query',
-  link: 'url',
-  href: 'url',
-};
-
-/** Canonical tool name + object arguments (JSON strings parsed, aliases mapped). */
-export function normalizeToolCall(
-  name: string,
-  args: unknown,
-): { name: string; args: unknown } {
-  const canonical = TOOL_ALIASES[name] ?? name;
-  let parsed = args;
-  if (typeof parsed === 'string') {
-    try {
-      parsed = JSON.parse(parsed);
-    } catch {
-      return { name: canonical, args: parsed };
-    }
-  }
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    const mapped: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-      const target = PARAM_ALIASES[key];
-      // never let an alias overwrite an explicitly provided canonical key
-      mapped[target && !(target in (parsed as object)) ? target : key] = value;
-    }
-    parsed = mapped;
-  }
-  return { name: canonical, args: parsed };
-}
-
-/** `_run_read_tool()` — the project tools available to model steps.
- *  Exported for unit tests (search/write semantics must stay honest). */
-const CODE_EXT = /\.(js|jsx|ts|tsx|mjs|cjs|css|scss|less|json|php|java|c|cc|cpp|h|cs|go|rs|kt|swift|dart|vue|svelte)$/i;
-
-/** How unbalanced the brackets are (0 = every opening one is closed). */
-function bracketDebt(text: string): number {
-  let debt = 0;
-  for (const [o, c] of [['{', '}'], ['(', ')'], ['[', ']']]) debt += Math.abs(text.split(o).length - text.split(c).length);
-  return debt;
-}
-
-/**
- * Damage a write leaves behind, told to the model in the tool result so it repairs it at once (any model,
- * guided or not): an empty code file, brackets that no longer match, most of a file thrown away.
- */
-export function writeWarnings(rel: string, before: string | null, after: string): string {
-  const out: string[] = [];
-  if (!after.trim() && (CODE_EXT.test(rel) || /\.(html?|py|md|txt)$/i.test(rel))) out.push(`WARNING: ${rel} is EMPTY now — write its full content.`);
-  if (after.trim() && CODE_EXT.test(rel) && bracketDebt(after) > (before === null ? 0 : bracketDebt(before))) {
-    out.push(`WARNING: the brackets in ${rel} do not match now ({ } ( ) [ ]) — a closing or opening bracket was lost. read_file it and fix that.`);
-  }
-  if (before !== null) {
-    const lines = (t: string) => t.split(/\r?\n/).filter((l) => l.trim()).length;
-    const was = lines(before);
-    const now = lines(after);
-    if (was >= 4 && now < was * 0.5) {
-      out.push(`WARNING: ${rel} had ${was} lines, now ${now} — most of the file was removed. If only a part was meant to change, put the rest back (write_file the whole file) or use replace_in_file.`);
-    }
-    // a page rewritten by a small model silently loses finished blocks (the menu, the form…): name them
-    if (/\.html?$/i.test(rel)) {
-      const count = (t: string, re: RegExp) => (t.match(re) ?? []).length;
-      const lost: string[] = [];
-      const checks: Array<[string, RegExp]> = [
-        ['form', /<form\b/gi], ['sections', /<section\b/gi], ['headings', /<h[1-3]\b/gi], ['list items', /<li\b/gi],
-        ['prices', /\d+[.,]?\d*\s?(₼|AZN|TMT|ман|руб|₽|\$|€)/gi], ['scripts', /<script\b/gi], ['stylesheets', /<link[^>]+stylesheet/gi],
-      ];
-      for (const [name, re] of checks) {
-        const b = count(before, re);
-        const a = count(after, re);
-        if (b > a) lost.push(`${name} ${b}→${a}`);
-      }
-      if (lost.length) out.push(`WARNING: this rewrite of ${rel} REMOVED finished parts (${lost.join(', ')}). The user did not ask for that: put them back now (write_file the full page with everything that was there plus the new part). For small changes use replace_in_file instead of rewriting the page.`);
-    }
-  }
-  return out.length ? `\n${out.join('\n')}\n` : '';
-}
-
-export function runTool(
-  root: string,
-  name: string,
-  args: unknown,
-  onCreateTask?: (title: string, detail: string) => void,
-  onPlanTask?: (title: string, steps: string[]) => void,
-): string {
-  const normalized = normalizeToolCall(name, args);
-  name = normalized.name;
-  args = normalized.args;
-  if (args === null || typeof args !== 'object' || Array.isArray(args)) {
-    return `Tool failed: ${name} expects an object with named arguments (JSON), got ${typeof args}`;
-  }
-  const params = args as Record<string, unknown>;
-
-  if (name === 'list_files') {
-    const relativePath = String(params.path ?? '');
-    const target = safePath(root, relativePath);
-    if (!isDirectory(target)) return 'Folder not found';
-    const items = fs
-      .readdirSync(target, { withFileTypes: true })
-      .map((entry) => ({ entry, fullPath: path.join(target, entry.name) }))
-      .sort((a, b) => compareEntries(a.entry, b.entry));
-    const rows: string[] = [];
-    for (const item of items) {
-      if (TOOL_SKIP_DIRS.has(item.entry.name)) continue;
-      rows.push(
-        (item.entry.isDirectory() ? 'folder' : 'file') +
-          '  ' +
-          relativePosix(root, item.fullPath),
-      );
-    }
-    return rows.slice(0, 300).join('\n') || 'Folder is empty';
-  }
-
-  if (name === 'read_file') {
-    const relativePath = String(params.path ?? '');
-    const target = safePath(root, relativePath);
-    if (!isFile(target)) return 'File not found';
-    if (fs.statSync(target).size > MAX_FILE_SIZE) {
-      return 'File exceeds 1 MB and was not read';
-    }
-    // strict UTF-8 decoding — Python's read_text() raises on invalid bytes
-    const text = new TextDecoder('utf-8', { fatal: true }).decode(fs.readFileSync(target));
-    return sliceFile(text, readLimit, Number(params.start_line) || undefined, Number(params.end_line) || undefined);
-  }
-
-  if (name === 'search_files') {
-    const query = String(params.query ?? '').trim();
-    if (!query) return "Usage: search_files requires 'query'";
-    // Case-insensitive multi-word content search with RELEVANCE RANKING:
-    // all words must appear in a file (AND), every matching line is scored
-    // by how many query words it contains, and only then cut to the output
-    // cap. Without ranking, root-level noise (.aider.chat.history.md) used
-    // to win alphabetically and bury the real match. Binary files (NUL bytes
-    // or mojibake-heavy) and tooling logs are never scanned.
-    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const searchSkip = new Set([
-      ...TOOL_SKIP_DIRS,
-      'dist', 'build', 'out', 'coverage',
-      '__pycache__', '.cache', '.idea', '.vscode', '.turbo', '.output',
-    ]);
-    type Cand = { lineScore: number; fileScore: number; rel: string; ln: number; text: string };
-    const cand: Cand[] = [];
-    const partial: { n: number; rel: string }[] = [];
-    let scanned = 0;
-    const visit = (folder: string): void => {
-      if (scanned > 4000 || cand.length >= 400) return;
-      let entries: fs.Dirent[];
-      try {
-        entries = fs.readdirSync(folder, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      entries.sort((a, b) =>
-        a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
-      );
-      const dirs: string[] = [];
-      for (const entry of entries) {
-        const full = path.join(folder, entry.name);
-        if (entry.isDirectory()) {
-          if (searchSkip.has(entry.name)) continue;
-          dirs.push(full);
-          continue;
-        }
-        if (!entry.isFile()) continue;
-        // Tooling noise: aider session histories read like project prose.
-        if (entry.name.startsWith('.aider') || /\.(log|bak)$/.test(entry.name)) continue;
-        scanned++;
-        let buf: Buffer;
-        try {
-          if (fs.statSync(full).size > 1_000_000) continue;
-          buf = fs.readFileSync(full);
-        } catch {
-          continue;
-        }
-        if (buf.includes(0)) continue; // binary (NUL byte)
-        const text = buf.toString('utf8');
-        // Non-fatal utf8 decoding turns binary into U+FFFD soup — skip it.
-        const bad = (text.match(/\uFFFD/g) || []).length;
-        if (bad > text.length * 0.01) continue; // mojibake-heavy binary
-        // Generated/minified output (bundler chunks, tsbuildinfo) is one giant
-        // line per file: its word soup always "matches" and buries real code.
-        const probeLines = text.split('\n', 50);
-        const avgLen =
-          probeLines.reduce((sum, l) => sum + l.length, 0) / probeLines.length;
-        if (avgLen > 300) continue;
-        const lower = text.toLowerCase();
-        const fileScore = terms.filter((t) => lower.includes(t)).length;
-        if (fileScore === 0) continue;
-        const rel = relativePosix(root, full);
-        if (fileScore === terms.length) {
-          text.split('\n').forEach((line, idx) => {
-            if (cand.length >= 400) return;
-            const lineScore = terms.filter((t) => line.toLowerCase().includes(t)).length;
-            if (lineScore > 0) {
-              cand.push({ lineScore, fileScore, rel, ln: idx + 1, text: line.trim() });
-            }
-          });
-        } else if (terms.length > 1 && partial.length < 30) {
-          partial.push({ n: fileScore, rel });
-        }
-      }
-      for (const dir of dirs) {
-        if (scanned > 4000 || cand.length >= 400) return;
-        visit(dir);
-      }
-    };
-    visit(root);
-    if (cand.length) {
-      cand.sort(
-        (a, b) =>
-          b.lineScore - a.lineScore ||
-          b.fileScore - a.fileScore ||
-          a.rel.localeCompare(b.rel) ||
-          a.ln - b.ln,
-      );
-      const lines = cand
-        .slice(0, 60)
-        .map((c) => `${c.rel}:${c.ln}: ${c.text.slice(0, 160)}`);
-      partial.sort((a, b) => b.n - a.n || a.rel.localeCompare(b.rel));
-      const tail = partial.length
-        ? `\n\nЧастичные совпадения (не все слова): ${partial
-            .slice(0, 15)
-            .map((p) => p.rel)
-            .join(', ')}`
-        : '';
-      return lines.join('\n') + tail;
-    }
-    if (partial.length) {
-      partial.sort((a, b) => b.n - a.n || a.rel.localeCompare(b.rel));
-      return `Нет файлов со всеми словами. Частичные совпадения:\n${partial
-        .slice(0, 15)
-        .map((p) => p.rel)
-        .join('\n')}`;
-    }
-    return `No files containing '${query}'`;
-  }
-
-  if (name === 'write_file' || name === 'append_file') {
-    const relativePath = String(params.path ?? '');
-    if (!relativePath) {
-      return `Usage: ${name} requires 'path'`;
-    }
-    // A missing 'content' must NEVER be treated as an empty file: that would
-    // silently wipe an existing file. (An explicit empty string is fine.)
-    if (typeof params.content !== 'string') {
-      return `Ошибка: ${name} вызван без 'content' — файл НЕ изменён. Повтори вызов с полным содержимым в параметре content.`;
-    }
-    const content = params.content;
-    // Compaction leaves "[записано N симв., …]" stubs in old tool calls; a model
-    // that imitates one must not overwrite a real file with the placeholder.
-    if (/^\s*\[(записано \d+|результат убран)/.test(content) && content.length < 400) {
-      return `Ошибка: content — это служебная пометка о сжатии контекста, а не содержимое файла; файл НЕ изменён. Передай настоящий полный текст.`;
-    }
-    const target = safePath(root, relativePath);
-    if (name === 'append_file') {
-      if (!fs.existsSync(target)) fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.appendFileSync(target, content, 'utf8');
-      return `Appended to ${relativePosix(root, target)} (+${strLen(content)} bytes, now ${fs.statSync(target).size} bytes)${deltaTag(lineDelta('', content).added, 0)}`;
-    }
-    // Distinguish overwrite from creation: when the model believes it is
-    // editing an existing file, "File CREATED" means it got the path wrong
-    // (a hallucinated path otherwise silently spawns a bogus file).
-    const existed = fs.existsSync(target);
-    const prevSize = existed ? fs.statSync(target).size : null;
-    let before = '';
-    if (existed && (prevSize ?? 0) <= MAX_FILE_SIZE) {
-      try {
-        before = fs.readFileSync(target, 'utf8');
-      } catch {
-        before = '';
-      }
-    }
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, content, 'utf8');
-    const rel = relativePosix(root, target);
-    const delta = lineDelta(before, content);
-    if (existed) {
-      return `File overwritten: ${rel} (${strLen(content)} bytes, was ${prevSize} bytes)${writeWarnings(rel, (prevSize ?? 0) <= MAX_FILE_SIZE ? before : null, content)}${deltaTag(delta.added, delta.removed)}`;
-    }
-    return `File CREATED (новый файл): ${rel} (${strLen(content)} bytes). Если файл должен был существовать — путь неверен: проверь list_files родительской папки и повтори запись по верному пути.${writeWarnings(rel, null, content)}${deltaTag(delta.added, 0)}`;
-  }
-
-  if (name === 'replace_in_file') {
-    const relativePath = String(params.path ?? '');
-    const find = typeof params.find === 'string' ? params.find : '';
-    const replace = typeof params.replace === 'string' ? params.replace : '';
-    if (!relativePath || !find) return "Usage: replace_in_file requires 'path', 'find' and 'replace'";
-    const target = safePath(root, relativePath);
-    if (!fs.existsSync(target)) return `File not found: ${relativePath} — check the path with list_files.`;
-    const before = fs.readFileSync(target, 'utf8');
-    const rel = relativePosix(root, target);
-    const all = params.all === true || params.all === 'true';
-    let after: string | null = null;
-    if (before.includes(find)) {
-      after = all ? before.split(find).join(replace) : before.replace(find, () => replace);
-    } else {
-      // small models get spaces / line breaks slightly wrong: match the text with any whitespace
-      const words = find.trim().split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-      if (words.length && words[0]) {
-        const loose = new RegExp(words.join('\\s+'), all ? 'g' : '');
-        if (loose.test(before)) after = before.replace(loose, () => replace);
-      }
-    }
-    if (after === null) {
-      // the longest real word of `find` that the file has (tags and punctuation are not words)
-      const key = (find.match(/[\p{L}\p{N}_-]{3,}/gu) ?? []).sort((a, b) => b.length - a.length).find((w) => before.includes(w)) ?? '';
-      const near = key ? before.split(/\r?\n/).map((l, i) => ({ l, i })).filter((x) => x.l.includes(key)).slice(0, 5) : [];
-      return `Text not found in ${rel}; the file is NOT changed.` +
-        (near.length ? ` Lines with "${key}":\n${near.map((x) => `${x.i + 1}: ${x.l.trim().slice(0, 200)}`).join('\n')}\nCopy the exact text from there into 'find'.` : ' read_file it and copy the exact text into \'find\'.');
-    }
-    fs.writeFileSync(target, after, 'utf8');
-    const delta = lineDelta(before, after);
-    return `Replaced in ${rel} (${strLen(after)} bytes)${writeWarnings(rel, before, after)}${deltaTag(delta.added, delta.removed)}`;
-  }
-
-  if (name === 'delete_file' || name === 'delete_path') {
-    const relativePath = String(params.path ?? '');
-    if (!relativePath) return "Usage: delete_file requires 'path'";
-    const target = safePath(root, relativePath);
-    if (target === root) return 'Refusing to delete the project root';
-    if (!fs.existsSync(target)) return 'Path not found';
-    const wasDir = fs.statSync(target).isDirectory();
-    let removedLines = 0;
-    if (!wasDir && fs.statSync(target).size <= MAX_FILE_SIZE) {
-      try {
-        removedLines = lineDelta(fs.readFileSync(target, 'utf8'), '').removed;
-      } catch {
-        removedLines = 0;
-      }
-    }
-    fs.rmSync(target, { recursive: true, force: true });
-    return `Deleted ${wasDir ? 'folder' : 'file'}: ${relativePosix(root, target)}${wasDir ? '' : deltaTag(0, removedLines)}`;
-  }
-
-  if (name === 'create_task') {
-    const title = String(params.title ?? '').trim();
-    const detail = typeof params.detail === 'string' ? params.detail : '';
-    if (!title) return "Usage: create_task requires 'title'";
-    if (!onCreateTask) return 'Task board is not available';
-    onCreateTask(title, detail);
-    return `Task created: ${title}`;
-  }
-
-  if (name === 'plan_task') {
-    const title = String(params.title ?? '').trim();
-    const rawSteps = params.steps;
-    let steps: unknown = rawSteps;
-    if (typeof rawSteps === 'string') {
-      // a model may send the list as a JSON string or as "1. …\n2. …" lines
-      try {
-        steps = JSON.parse(rawSteps);
-      } catch {
-        steps = rawSteps.split('\n');
-      }
-    }
-    const list = (Array.isArray(steps) ? steps : [])
-      .map((s) => String(s).replace(/^\s*(?:\d+[.)]|[-*•])\s*/, '').trim())
-      .filter(Boolean)
-      .slice(0, 20);
-    if (!title || list.length === 0) return "Usage: plan_task requires 'title' and a non-empty 'steps' array";
-    if (!onPlanTask) return 'Task board is not available';
-    onPlanTask(title, list);
-    return `План создан: «${title}», этапов: ${list.length}. Он появился на панели задач — выполнять по этапам можно кнопкой «Выполнить».`;
-  }
-
-  return 'Unknown tool';
-}
-
 /** Runs a project tool or, for web tools, the async network implementation. */
 async function execTool(
   root: string,
@@ -782,6 +325,7 @@ async function execTool(
   onCreateTask?: (title: string, detail: string) => void,
   onPlanTask?: (title: string, steps: string[]) => void,
   webEnabled = true,
+  session?: EditSession,
 ): Promise<string> {
   const call = normalizeToolCall(name, args);
   if (WEB_TOOLS.has(call.name)) {
@@ -811,7 +355,7 @@ async function execTool(
     }
   }
   if (PREVIEW_TOOLS.has(call.name)) return runPreviewTool(root, call.name, call.args);
-  return runTool(root, call.name, call.args, onCreateTask, onPlanTask);
+  return runTool(root, call.name, call.args, onCreateTask, onPlanTask, session);
 }
 
 const PREVIEW_TOOLS = new Set(['preview_page', 'run_in_page']);
@@ -956,8 +500,6 @@ function gate(kind: 'shell' | 'ssh' | 'connector', interactive: boolean, always 
   return interactive ? 'ask' : 'This needs the user\'s approval, and this run has no chat to ask in. Tell the user what to run.';
 }
 
-/** The shell run_command uses on this OS (see shell.ts), named for the models. */
-const SHELL_NAME = process.platform === 'win32' ? 'Windows: PowerShell' : process.platform === 'darwin' ? 'macOS: sh, zsh-compatible' : 'Linux: sh';
 
 const DECLINED = 'The user declined this. Do not repeat it; continue without it or ask what they prefer.';
 const READ_ONLY_DOCKER = new Set(['status', 'validate', 'service-logs']);
@@ -1072,186 +614,6 @@ export async function nextAvailableModel(failedModels: Set<string>, failedProvid
     if (local) return local;
   }
   return null;
-}
-
-function workspaceTools(webEnabled = true): unknown[] {
-  const tool = (
-    name: string,
-    description: string,
-    params: Record<string, unknown>,
-    optional: string[] = [],
-  ) => ({
-    type: 'function',
-    function: {
-      name,
-      description,
-      parameters: {
-        type: 'object',
-        properties: params,
-        required: Object.keys(params).filter((key) => !optional.includes(key)),
-      },
-    },
-  });
-
-  return [
-    tool(
-      'list_files',
-      "List files and folders in the selected project. path: relative path like 'src' or '' for root",
-      {
-        path: {
-          type: 'string',
-          description: 'Relative path from project root',
-        },
-      },
-    ),
-    tool(
-      'read_file',
-      'Read a UTF-8 text file. Long files are returned in parts: use start_line/end_line to read the next part.',
-      {
-        path: { type: 'string', description: 'Relative path to the file' },
-        start_line: { type: 'number', description: 'First line to read (1-based)' },
-        end_line: { type: 'number', description: 'Last line to read' },
-      },
-      ['start_line', 'end_line'],
-    ),
-    tool(
-      'search_files',
-      'Case-insensitive content search across project files (skips node_modules/dist). query: 2-3 lowercase words separated by spaces; all words must occur in a file. Returns matched lines as path:line: text, plus partial matches.',
-      {
-        query: {
-          type: 'string',
-          description: '2-3 words to find in file contents, e.g. "stop button"',
-        },
-      },
-    ),
-    tool(
-      'web_search',
-      'Search the internet (documentation, libraries, errors). query: search terms. Returns titles, URLs and snippets; open a result with fetch_url.',
-      {
-        query: { type: 'string', description: 'Search query' },
-      },
-    ),
-    tool(
-      'fetch_url',
-      'Download a web page (http/https) and return its readable text. url: full address, e.g. a link from web_search.',
-      {
-        url: { type: 'string', description: 'Full http(s) URL' },
-      },
-    ),
-    tool(
-      'write_file',
-      'Create or overwrite a file. path: relative path, content: file content',
-      {
-        path: {
-          type: 'string',
-          description: 'Relative path from project root',
-        },
-        content: { type: 'string', description: 'Content to write' },
-      },
-    ),
-    tool(
-      'plan_task',
-      'Create a checklist plan on the task board for a LARGE multi-step job (3-10 concrete steps). title: overall goal; steps: ordered list of short, independently doable steps. Start a step with "∥ " when it touches DIFFERENT files than the step before it and does not need its result: those two then run in parallel. Use it BEFORE starting big work instead of trying to do everything in one go.',
-      {
-        title: { type: 'string', description: 'Overall goal' },
-        steps: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Ordered concrete steps',
-        },
-      },
-    ),
-    tool(
-      'append_file',
-      'Append text to the end of a file (creates it if missing). Use for LARGE files: write_file the first part, then append_file the next parts, so no single call gets cut off.',
-      {
-        path: { type: 'string', description: 'Relative path from project root' },
-        content: { type: 'string', description: 'Text to append' },
-      },
-    ),
-    tool(
-      'replace_in_file',
-      'Change part of a file: replace the text `find` with `replace` (the rest of the file stays as it is). Best for small edits: a heading, a value, a few lines. find must be copied from the file (read_file first). all=true replaces every occurrence.',
-      {
-        path: { type: 'string', description: 'Relative path to the file' },
-        find: { type: 'string', description: 'Exact text to replace (copied from the file)' },
-        replace: { type: 'string', description: 'New text' },
-        all: { type: 'boolean', description: 'Replace every occurrence (default: the first)' },
-      },
-      ['all'],
-    ),
-    tool(
-      'delete_file',
-      'Delete a file or folder (recursively) inside the project. path: relative path from project root',
-      {
-        path: { type: 'string', description: 'Relative path to delete' },
-      },
-    ),
-    tool(
-      'run_command',
-      'Run ONE shell command in the project folder and get its output (' + SHELL_NAME + '). Use it for npm/pnpm/composer/pip, git, migrations and tests. For Docker Compose use Otto’s Docker integration (`otto_docker`) or write a normal `docker compose -f otto.compose.yaml ...` command; Otto routes supported Compose actions through its local Services API. The user may have to approve each command; never run destructive commands. timeout_seconds: up to 600 (default 120).',
-      {
-        command: { type: 'string', description: 'The command line to run' },
-        timeout_seconds: { type: 'number', description: 'Time limit in seconds (default 120, max 600)' },
-        background: { type: 'boolean', description: 'true for long-running commands (dev servers like npm run dev / php artisan serve, watchers, docker compose up without -d): it keeps running and you get its first output' },
-      },
-      ['timeout_seconds', 'background'],
-    ),
-    tool(
-      'otto_docker',
-      'Use Otto’s local Docker integration for this project. This sends the action through Otto’s own Services API, not through the agent shell. Use status/validate to inspect; use up to build/start otto.compose.yaml services; use runtime-up to build/start the configured devcontainer. down/runtime-down stop services. service-start/stop/restart/logs manage one compose service; provide service. Mutating actions follow the Agent → Terminal commands permission setting.',
-      {
-        action: { type: 'string', enum: ['status', 'validate', 'up', 'down', 'runtime-up', 'runtime-down', 'service-start', 'service-stop', 'service-restart', 'service-logs'], description: 'Otto Docker action' },
-        service: { type: 'string', description: 'Compose service name for service-* actions' },
-      },
-      ['service'],
-    ),
-    tool(
-      'create_task',
-      'Add a task to the project task board (for follow-up work the user should see). title: short task name, detail: optional description',
-      {
-        title: { type: 'string', description: 'Short task title' },
-        detail: { type: 'string', description: 'Optional longer description' },
-      },
-    ),
-    tool(
-      'preview_page',
-      'Open a project HTML file in a REAL browser and report what is there: console/JS errors, horizontal overflow at desktop and 375px phone width, headings, buttons/forms, broken anchors and images, external resources; saves a screenshot. Call it after creating or changing a page. look=true also gets a design review of the screenshot from a vision model (slow, use once at the end).',
-      {
-        path: { type: 'string', description: 'Relative path to the .html file' },
-        width: { type: 'number', description: 'Desktop viewport width (default 1280)' },
-        look: { type: 'boolean', description: 'Also ask a vision model to review the screenshot' },
-      },
-      ['width', 'look'],
-    ),
-    tool(
-      'run_in_page',
-      'Run a scenario in the page in a real browser and get the result. script is the BODY of an async function: it can await and use $(sel), $$(sel), visible(el), wait(ms); alert() is captured. It must return a JSON value. Example: fill the email field, submit the form and return {successVisible: visible($(".success")), formVisible: visible($("form"))}. Use it to VERIFY forms, buttons, menus, tabs instead of assuming they work.',
-      {
-        path: { type: 'string', description: 'Relative path to the .html file' },
-        script: { type: 'string', description: 'Body of an async function that returns a JSON-serialisable value' },
-        width: { type: 'number', description: 'Viewport width (default 1280; use 375 to test the phone layout)' },
-      },
-      ['width'],
-    ),
-    tool(
-      'use_skill',
-      'Load a skill: a pack of expert rules for a kind of work (see the list of available skills in the system prompt). Call it BEFORE starting such work.',
-      { name: { type: 'string', description: 'Skill name from the list' } },
-    ),
-    tool(
-      'read_skill_file',
-      'Read a file that comes with a skill (a reference, template or script listed by use_skill). name: skill name; path: file path inside the skill, e.g. "reference/forms.md".',
-      { name: { type: 'string', description: 'Skill name' }, path: { type: 'string', description: 'File path inside the skill folder' } },
-    ),
-    ...sshTools.map(asFunctionTool),
-    ...connectorTools().map(asFunctionTool),
-    ...appTools(null).map(asFunctionTool),
-  ].filter((spec) => {
-    // Web tools are offered only while the composer's Web toggle is on
-    const name = (spec as { function: { name: string } }).function.name;
-    return webEnabled || !WEB_TOOLS.has(name);
-  });
 }
 
 /** `_project_tree()` — compact 2-level tree used by the "Context" toggle. */
@@ -1655,11 +1017,6 @@ export async function* generateResponse(
     const why = (options.failReasons ?? []).map((r) => `- ${r}`).join('\n');
     return assistantChunk(`${notice('allLimits', options.prompt, { tried })}${why ? `\n${why}` : ''}`, msgId, ts, pid, false);
   };
-  // Repeat short-circuit for read-only tools: a stuck model re-running the
-  // same search/read floods num_ctx and pushes the task itself out of
-  // context. A repeat returns a short note (the original result is still in
-  // history); write_file/delete_file invalidate stale entries for that path.
-  const recentReads = new Map<string, { step: number; path: string }>();
   const changes = new ChangeTracker();
   let thinking = '';
   const thinkId = `think-${options.messageId}`;
@@ -1688,6 +1045,20 @@ export async function* generateResponse(
     yield err(notice('noFolder', options.prompt));
     return;
   }
+  // the files as they were before this run (the "undo" button of the changes card), the rules for
+  // changing them, and the watch for a model going in circles — the same for every model and mode
+  const checkpoint = new Checkpoint(root, options.messageId);
+  const edits = new EditSession();
+  const loop = new LoopGuard(root);
+  /** The changes card of the final answer; it can undo the run while the checkpoint is there. */
+  const changesCard = (): string => {
+    try {
+      checkpoint.save();
+    } catch (exc) {
+      console.warn(`[checkpoint] not saved: ${errorMessage(exc)}`);
+    }
+    return changes.marker(checkpoint.empty ? undefined : checkpoint.run);
+  };
 
   // Codex via the user's ChatGPT subscription: the installed Codex CLI works in the project folder
   if (isCodexModel(options.model)) {
@@ -1745,6 +1116,7 @@ export async function* generateResponse(
         const itemId = String(item.id ?? '');
         if (type === 'item.started' || (type === 'item.completed' && !started.has(itemId) && item.type !== 'agent_message' && item.type !== 'reasoning')) {
           const acts = codexItemActivity(item, root).map((a) => {
+            if (type === 'item.started' && (a.tool === 'write_file' || a.tool === 'delete_file') && a.target) checkpoint.remember(a.target);
             let before: string | null = null;
             if (a.tool === 'write_file' && a.target) { try { before = fs.readFileSync(path.resolve(root, a.target), 'utf8'); } catch { before = null; } }
             return { ...a, actId: `act-${msgId}-codex-${n++}`, before };
@@ -1829,7 +1201,7 @@ export async function* generateResponse(
       return;
     }
     autoPreview(finalText);
-    yield assistantChunk(finalText, msgId, ts, pid, false, false, changes.marker());
+    yield assistantChunk(finalText, msgId, ts, pid, false, false, changesCard());
     return;
   }
 
@@ -1905,6 +1277,7 @@ export async function* generateResponse(
             const tool = ottoToolName(String(block.name ?? ''));
             const target = cliToolTarget(input, root);
             const actId = `act-${msgId}-cli-${n++}`;
+            if ((tool === 'write_file' || tool === 'delete_file') && target) checkpoint.remember(target);
             let before: string | null = null;
             if (tool === 'write_file' && target) { try { before = fs.readFileSync(path.resolve(root, target), 'utf8'); } catch { before = null; } }
             pending.set(String(block.id ?? actId), { tool, target, actId, before, input });
@@ -1976,7 +1349,7 @@ export async function* generateResponse(
       return;
     }
     autoPreview(finalText);
-    yield assistantChunk(finalText, msgId, ts, pid, false, false, changes.marker());
+    yield assistantChunk(finalText, msgId, ts, pid, false, false, changesCard());
     return;
   }
 
@@ -2060,25 +1433,27 @@ export async function* generateResponse(
 
   let systemContent: string;
   if (toolsEnabled) {
-    systemContent = `Ты автономный агент-инженер, который САМ ВЫПОЛНЯЕТ работу в проекте ${root}, а не рассказывает о ней. Инструменты: list_files, read_file, search_files, write_file, delete_file, create_task, plan_task, append_file${webOn ? ', web_search, fetch_url' : ''}.
+    systemContent = `Ты автономный агент-инженер, который САМ ВЫПОЛНЯЕТ работу в проекте ${root}, а не рассказывает о ней. Инструменты: list_files, read_file, search_files, replace_in_file, write_file, append_file, delete_file, create_task, plan_task${webOn ? ', web_search, fetch_url' : ''}.
 
-КРИТИЧЕСКОЕ ПРАВИЛО: код изменяется ТОЛЬКО через вызов инструмента write_file(path, content). ЗАПРЕЩЕНО присылать код в текст ответа (никаких блоков \`\`\`tsx/js/php…\`\`\` с содержимым файла в сообщении). Если ты вывел код в чат вместо write_file — это ошибка: вместо этого вызови write_file с полным путём и содержимым.
+КРИТИЧЕСКОЕ ПРАВИЛО: код изменяется ТОЛЬКО инструментами: replace_in_file — правка существующего файла, write_file(path, content) — новый файл. ЗАПРЕЩЕНО присылать код в текст ответа (никаких блоков \`\`\`tsx/js/php…\`\`\` с содержимым файла в сообщении). Если ты вывел код в чат — это ошибка: вместо этого примени его инструментом.
 
 НАХОЖДЕНИЕ НУЖНОГО МЕСТА (важно):
 - Начинай с search_files по СОДЕРЖАНИЮ файлов: ключевые слова из самой задачи — строки кнопок («Stop», «Send»), имена обработчиков (onStop, onClick), имена компонентов (Composer). Запрос: 2-3 слова в нижнем регистре через пробел, регистр не важен. Результат содержит строки вида путь:строка: текст — открывай найденное, не гадай содержимое.
 - НЕ листай каталоги вслепую: list_files подряд — максимум 2 раза, дальше только search_files или read_file.
-- Прочитал ≤3 файлов по делу — переходи к write_file, не продолжай исследование.
+- Прочитал ≤3 файлов по делу — переходи к правке, не продолжай исследование.
 - Перед правкой СУЩЕСТВУЮЩЕГО файла сначала прочитай его по точному пути. Результат write_file «File CREATED (новый файл)» при ожидаемой правке существующего — это ошибка пути: сделай list_files родительской папки, найди верный путь и повтори запись.
 - Результаты поиска и чтения — это НЕ реплики пользователя: не отвечай на их содержимое и не пересказывай его (никаких «ваши данные содержат фрагменты…»). Если результат мусорный, пустой или непонятный — переформулируй запрос другими ключевыми словами или сделай list_files по нужной папке и продолжай; задача пользователя от этого не меняется.
 
 ${webRules}Порядок работы:
 1. Кратко (1-2 строки) плана.
 2. Изучи нужные файлы: search_files/read_file (не перечитывай одно и то же).
-3. Применяй КАЖДОЕ изменение через write_file (полный путь от корня проекта + полное новое содержимое файла).
+3. Применяй КАЖДОЕ изменение инструментом. Существующий файл: replace_in_file (find — точный фрагмент, скопированный из read_file; replace — новый текст), по одному вызову на каждое место — остальной файл не трогается. write_file с полным содержимым — для нового файла или полной переделки файла, который ты прочитал в этом ходе.
 4. Найдёшь дальнейшие шаги — заводи их через create_task.
 5. В конце — короткий ИТОГ: какие файлы созданы/изменены (без вставки кода).
 
-ИТОГ — ТОЛЬКО по реальным результатам инструментов: «изменён/создан файл X» пиши исключительно если write_file вернул подтверждение записи (File overwritten / File CREATED). Если вызова не было — НИКОГДА не утверждай, что файл изменён.
+ИТОГ — ТОЛЬКО по реальным результатам инструментов: «изменён/создан файл X» пиши исключительно если инструмент подтвердил запись (File overwritten / File CREATED / Replaced in / Appended to). Если вызова не было или он вернул ошибку — НИКОГДА не утверждай, что файл изменён.
+
+ЗАЩИТА ФАЙЛОВ: ответ инструмента, начинающийся с REJECTED, значит, что файл НЕ изменён — запись сломала бы синтаксис (указаны строки) или выбросила бы большую часть файла. Прочитай причину и исправь вызов, а не повторяй его. «Repeated call» — такой вызов уже был: его результат выше, переходи к следующему шагу. «No change» — файл уже такой.
 
 ОБРАЗЦЫ И ШАБЛОНЫ: если пользователь прислал HTML/CSS/код как шаблон или образец, либо описание изображения — это ОСНОВА работы: сохрани его структуру, классы, тексты и стили, меняй только то, о чём просят. Не переписывай с нуля и не придумывай другой дизайн. Макет/концепт сохраняй файлом через write_file — предпочтительно одним самодостаточным .html (inline CSS/JS), который открывается двойным кликом.
 
@@ -2090,7 +1465,7 @@ ${webRules}Порядок работы:
 
 Для «концепт»/архитектуры — сохрани документ в файл (напр. CONCEPT.md) через write_file, не печатай его целиком в чат.
 
-ЗАПРЕЩЕНО заканчивать ответ анализом/описанием/планом, если задача — создать/изменить/удалить/реализовать. Прочитать файлы — недостаточно: пока не вызван write_file/delete_file, задача НЕ выполнена. Сначала применяй изменения инструментами, и только потом пиши ИТОГ. Отвечай на языке пользователя.`;
+ЗАПРЕЩЕНО заканчивать ответ анализом/описанием/планом, если задача — создать/изменить/удалить/реализовать. Прочитать файлы — недостаточно: пока изменения не применены инструментами (replace_in_file/write_file/delete_file), задача НЕ выполнена. Сначала применяй изменения инструментами, и только потом пиши ИТОГ. Отвечай на языке пользователя.`;
   } else if (visionMode) {
     systemContent =
       'Ты видишь изображение. Следуй строгим правилам:\n' +
@@ -2140,8 +1515,6 @@ ${webRules}Порядок работы:
   const guided = toolsEnabled && !providerForModel(String(activeModel)) && localMode !== 'native' && (localMode === 'guided' || !ollamaCloud);
   let guidedFormat: Record<string, unknown> | null = null;
   let guidedBad = 0;
-  // the same action on the same target again and again: a small model going in circles
-  const guidedSeen = new Map<string, number>();
   if (guided) {
     const allSpecs: ToolSpec[] = (toolSpecs as Array<{ function: ToolSpec }>).map((t) => t.function);
     const picked = pickGuidedTools(options.prompt, allSpecs.map((t) => t.name));
@@ -2294,17 +1667,21 @@ ${webRules}Порядок работы:
       const text = ru
         ? `Готово: сайт «${map.site}» из ${map.pages.length} страниц, открыт в превью.\n${list}\n\nДизайн (style.css), шапка, подвал и скрипты (script.js) — общие для всех страниц, страницы собраны по одной.`
         : `Done: the site "${map.site}" with ${map.pages.length} pages, shown in the Preview.\n${list}\n\nThe design (style.css), header, footer and scripts (script.js) are shared by every page; the pages were made one by one.`;
-      yield assistantChunk(text, msgId, ts, pid, false, toolsEnabled, changes.marker());
+      yield assistantChunk(text, msgId, ts, pid, false, toolsEnabled, changesCard());
       return;
     }
   }
 
   try {
     const stepLimit = maxToolSteps();
+    // the standing reminder after a tool step: one copy, replaced every step (copies used to pile up)
+    let reminder: Message | null = null;
     for (let step = 0; step < stepLimit; step++) {
       const ctxTokens = providerForModel(activeModel) ? 65536 : typeof sampling.num_ctx === 'number' ? sampling.num_ctx : 8192;
-      readLimit = readLimitChars(ctxTokens);
+      setReadLimit(readLimitChars(ctxTokens));
       const compacted = compactMessages(messages, ctxTokens);
+      // old results were cut out of the context: reading them again is not a loop any more
+      if (compacted) loop.forgetResults();
       const payload: Record<string, unknown> = {
         model: activeModel,
         messages: guided ? toGuidedMessages(messages) : messages,
@@ -2492,30 +1869,6 @@ ${webRules}Порядок работы:
           contentParts.length = 0;
           contentParts.push(String(parsed.args.text ?? '').trim());
         } else {
-          const a = parsed.args;
-          // a rewrite with clearly different content is progress, not a loop
-          const target = String(a.path ?? a.command ?? a.url ?? a.view ?? a.action ?? a.host ?? JSON.stringify(a).slice(0, 120)) +
-            (typeof a.content === 'string' ? `#${Math.round(a.content.length / 500)}` : '');
-          const sig = `${parsed.action}:${target}`;
-          const seen = (guidedSeen.get(sig) ?? 0) + 1;
-          guidedSeen.set(sig, seen);
-          if (seen >= 3) {
-            // third time: the work is done as far as it can be; Otto finishes it (preview, summary)
-            const done = notice('loopStopped', options.prompt);
-            const finalText = (accumulated ? accumulated + '\n\n' : '') + done;
-            autoPreview(finalText);
-            yield assistantChunk(finalText, msgId, ts, pid, false, toolsEnabled, changes.marker());
-            return;
-          }
-          if (seen === 2 && /^(write_file|append_file|otto_|ssh_connect|run_command)/.test(parsed.action)) {
-            messages.push({ role: 'assistant', content: contentParts.join('') });
-            messages.push({
-              role: 'user',
-              content: `You already did ${parsed.action} (${target.slice(0, 80)}) and it worked — do not repeat it. Do the NEXT step: ` +
-                (wantsPreview(options.prompt) ? 'show the result with otto_preview, then ' : '') + 'answer with a short summary.',
-            });
-            continue;
-          }
           contentParts.length = 0;
           toolCalls.push({ function: { name: parsed.action, arguments: parsed.args } });
         }
@@ -2578,7 +1931,7 @@ ${webRules}Порядок работы:
           }
           if (thinking) yield thinkingChunk(thinking, thinkId, ts, pid, false);
           autoPreview(finalText);
-        yield assistantChunk(finalText, msgId, ts, pid, false, toolsEnabled, changes.marker());
+        yield assistantChunk(finalText, msgId, ts, pid, false, toolsEnabled, changesCard());
           return;
         }
         toolCalls.push(...textCalls);
@@ -2606,6 +1959,20 @@ ${webRules}Порядок работы:
         const argsObj = (fn.arguments && typeof fn.arguments === 'object' ? fn.arguments : {}) as Record<string, unknown>;
         const paths = activityPaths(fn.arguments);
         const actId = `act-${msgId}-${step}-${i}`;
+        // a call that was already done (or failed the same way twice) is answered without running it
+        const refusal = loop.before(name, argsObj);
+        if (refusal) {
+          messages.push({ role: 'tool', tool_name: name, content: refusal });
+          options.onToolEvent?.(name, fn.arguments, refusal);
+          continue;
+        }
+        const target = toolKind(name) === 'write' && name !== 'ssh_write_file' && typeof argsObj.path === 'string' ? argsObj.path : '';
+        if (target) checkpoint.remember(target);
+        /** What the call returned goes to the loop watch; a write that changed nothing leaves the checkpoint. */
+        const record = (out: string): void => {
+          loop.after(name, argsObj, out);
+          if (target) checkpoint.settle(target);
+        };
         if (name !== 'run_command') yield activity('tool_start', name, paths, actId);
         let result: string;
         const extTool = sshTools.find((t) => t.name === name) ?? connectorTools().find((t) => t.name === name) ?? appTools(null).find((t) => t.name === name);
@@ -2641,6 +2008,7 @@ ${webRules}Порядок работы:
           }
           result = await job;
           yield activity('tool_end', name, paths, actId);
+          record(result);
           messages.push({ role: 'tool', tool_name: name, content: result });
           options.onToolEvent?.(name, fn.arguments, result);
           continue;
@@ -2696,29 +2064,16 @@ ${webRules}Порядок работы:
             }
             yield activity('tool_end', name, [command], actId);
           }
+          record(result!);
           messages.push({ role: 'tool', tool_name: name, content: result! });
           options.onToolEvent?.(name, fn.arguments, result!);
           continue;
         }
-        const sortedArgs = Object.fromEntries(
-          Object.entries(argsObj).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
-        );
-        const cacheKey = `${name}:${JSON.stringify(sortedArgs)}`;
         if (READ_ONLY_TOOLS.has(name)) {
-          const hit = recentReads.get(cacheKey);
-          if (hit && step - hit.step <= 6) {
-            result =
-              `Повторный вызов: этот же результат уже получали на шаге ${hit.step}. ` +
-              'Не перечитывай одно и то же — результат выше в истории; переходи к следующему шагу (найдено → write_file).';
-          } else {
-            try {
-              result = await execTool(root, name, fn.arguments, options.onCreateTask, options.onPlanTask, webOn);
-            } catch (exc) {
-              result = `Tool failed: ${errorMessage(exc)}`;
-            }
-            if (!result.startsWith('Tool failed')) {
-              recentReads.set(cacheKey, { step, path: String(argsObj.path ?? '') });
-            }
+          try {
+            result = await execTool(root, name, fn.arguments, options.onCreateTask, options.onPlanTask, webOn, edits);
+          } catch (exc) {
+            result = `Tool failed: ${errorMessage(exc)}`;
           }
         } else {
           const blocked = name === 'write_file' || name === 'append_file' || name === 'replace_in_file' || name === 'delete_file'
@@ -2728,12 +2083,12 @@ ${webRules}Порядок работы:
             result = blocked;
           } else {
             try {
-              result = await execTool(root, name, fn.arguments, options.onCreateTask, options.onPlanTask, webOn);
+              result = await execTool(root, name, fn.arguments, options.onCreateTask, options.onPlanTask, webOn, edits);
             } catch (exc) {
               result = `Tool failed: ${errorMessage(exc)}`;
             }
           }
-          if (name === 'write_file' && /\.html?$/i.test(String(argsObj.path ?? '')) && !result.startsWith('Tool failed')) {
+          if (name === 'write_file' && /\.html?$/i.test(String(argsObj.path ?? '')) && !isFailure(result)) {
             lastHtmlWritten = String(argsObj.path).replace(/\\/g, '/').replace(/^\/+/, '');
             // small models answer "make a landing page" with a stub: say so, they then write a real one
             const size = String(argsObj.content ?? '').length;
@@ -2741,15 +2096,7 @@ ${webRules}Порядок работы:
               result += `\nNOTE: this page is only ${size} characters — a stub, not what the user asked for. Rewrite it with write_file as a complete page: <style> in <head>, a header, at least 3 content sections, a footer, real texts.`;
             }
           }
-          if (/^(write_file|replace_in_file|append_file)$/.test(name) && /\.(html?|css)$/i.test(String(argsObj.path ?? '')) && !result.startsWith('Tool failed')) touchedWeb = true;
-          if (name === 'write_file' || name === 'replace_in_file' || name === 'delete_file') {
-            const changed = String(argsObj.path ?? '');
-            if (changed) {
-              for (const [key, entry] of recentReads) {
-                if (entry.path === changed) recentReads.delete(key);
-              }
-            }
-          }
+          if (/^(write_file|replace_in_file|append_file)$/.test(name) && /\.(html?|css)$/i.test(String(argsObj.path ?? '')) && !isFailure(result)) touchedWeb = true;
         }
         yield activity('tool_end', name, paths, actId);
         // a page the model checked in its headless browser is shown to the user too when they asked to see it
@@ -2759,33 +2106,50 @@ ${webRules}Порядок работы:
           if (page) options.onUi({ action: 'preview-file', path: page });
         }
         changes.track(name, argsObj, result);
+        record(result);
         messages.push({ role: 'tool', tool_name: name, content: result });
         options.onToolEvent?.(name, fn.arguments, result);
+      }
+      // going in circles: stop here and let the model sum up what it really did
+      if (loop.stopReason) {
+        console.warn(`[agent] ${activeModel} stopped: ${loop.stopReason}`);
+        break;
       }
       // Continuation nudge: small models often read one tool result and
       // "answer" mid-task (summarizing search output instead of editing).
       // A standing system reminder after every tool batch keeps the loop
       // going until the work is actually applied via write_file.
-      messages.push({
+      if (reminder) {
+        const at = messages.indexOf(reminder);
+        if (at >= 0) messages.splice(at, 1);
+      }
+      reminder = {
         role: 'system',
         content:
           'Продолжай работу по правилам: результат инструмента выше — это ещё не ответ пользователю. ' +
-          'Если задача-действие (изменить/создать/удалить файл) ещё не выполнена инструментом ' +
-          'write_file/delete_file — следующий ход продолжай инструментами, НЕ завершай ответ. ' +
-          'НЕ повторяй уже выполненные вызовы: повтор вернёт пометку «Повторный вызов». ' +
-          'Как только нужный файл найден и прочитан — сразу вызывай write_file с ПОЛНЫМ новым ' +
-          'содержимым файла; перечислять планы и «давайте изучим подробнее» без write_file задачу ' +
-          'не выполняет. Завершать ответ можно только когда изменения применены и ты пишешь ' +
-          'короткий ИТОГ, либо когда задача была вопросом без правок.',
-      });
+          'Если задача-действие (изменить/создать/удалить файл) ещё не выполнена — следующий ход продолжай инструментами, НЕ завершай ответ. ' +
+          'Существующий файл меняй через replace_in_file (точный фрагмент из read_file → новый текст); write_file — для новых файлов ' +
+          'или полной переделки уже прочитанного файла. Ответ REJECTED означает, что файл НЕ изменён: исправь вызов по его тексту. ' +
+          'НЕ повторяй уже выполненные вызовы: повтор вернёт «Repeated call». Завершать ответ можно только когда изменения применены ' +
+          'и ты пишешь короткий ИТОГ, либо когда задача была вопросом без правок.',
+      };
+      messages.push(reminder);
     }
     // Tool budget exhausted — instead of an error, ask once more WITHOUT tools
     // so the model gives a final answer from what it already gathered.
     try {
+      const stopped = loop.stopReason;
       const finalMessages = [
         ...messages,
-        { role: 'user', content: 'Заверши ответ на основе уже собранной информации. Не вызывай инструменты, дай итог.' },
+        {
+          role: 'user',
+          content: stopped
+            ? `Otto остановил работу: ${stopped}. Не вызывай инструменты. Честно подведи итог: что реально сделано (только то, что подтвердили инструменты), что не получилось и почему, и что пользователю сделать дальше.`
+            : 'Заверши ответ на основе уже собранной информации. Не вызывай инструменты, дай итог.',
+        },
       ];
+      const lead = stopped ? `⚠️ ${notice('loopGuard', options.prompt)}` : '';
+      if (lead) accumulated = [accumulated, lead].filter(Boolean).join('\n\n');
       const finalResp = await postChat({ model: activeModel, messages: finalMessages, stream: true, options: sampling });
       if (finalResp.status === 200) {
         const parts: string[] = [];
@@ -2800,18 +2164,18 @@ ${webRules}Порядок работы:
         }
         const finalText =
           ((accumulated ? accumulated + '\n\n' : '') + stripFakeCalls(parts.join(''))).replace(/\s+$/, '') ||
-          notice('stepLimit', options.prompt);
+          notice(loop.stopReason ? 'loopGuard' : 'stepLimit', options.prompt);
         if (thinking) yield thinkingChunk(thinking, thinkId, ts, pid, false);
         autoPreview(finalText);
-        yield assistantChunk(finalText, msgId, ts, pid, false, toolsEnabled, changes.marker());
+        yield assistantChunk(finalText, msgId, ts, pid, false, toolsEnabled, changesCard());
         return;
       }
     } catch { /* fall through to note */ }
     const fallback = (
-      accumulated + '\n\n' + notice('stepLimit', options.prompt)
+      loop.stopReason ? accumulated : accumulated + '\n\n' + notice('stepLimit', options.prompt)
     ).replace(/^\s+/, '');
     if (thinking) yield thinkingChunk(thinking, thinkId, ts, pid, false);
-    yield assistantChunk(fallback, msgId, ts, pid, false, toolsEnabled, changes.marker());
+    yield assistantChunk(fallback, msgId, ts, pid, false, toolsEnabled, changesCard());
   } catch (exc) {
     if (exc instanceof OllamaConnectionError) {
       yield err(`Ошибка соединения с ${providerForModel(activeModel)?.name ?? 'Ollama'}: ${exc.message}`);

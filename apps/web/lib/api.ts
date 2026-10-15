@@ -206,6 +206,17 @@ export async function createProjectFolder(projectId: number, folderPath: string)
   if (!res.ok) throw new Error(await apiError(res, 'Failed to create folder'));
 }
 
+/** Undo an agent run: its files go back to what they were before it. */
+export async function undoRun(projectId: number, run: string): Promise<{ restored: string[]; removed: string[]; skipped: string[] }> {
+  const res = await fetch(`${API_BASE}/api/checkpoints/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project_id: projectId, run }),
+  });
+  if (!res.ok) throw new Error(await apiError(res, 'Undo failed'));
+  return res.json();
+}
+
 export async function dockerProjectAction(projectId: number, action: 'status' | 'start-engine' | 'validate' | 'up' | 'down' | 'runtime-up' | 'runtime-down') {
   const res = await fetch(`${API_BASE}/api/services/docker?project_id=${projectId}&action=${action}`, {
     method: 'POST',

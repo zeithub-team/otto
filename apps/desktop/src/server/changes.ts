@@ -66,10 +66,14 @@ export class ChangeTracker {
     return [...this.files.values()].sort((a, b) => order[a.action] - order[b.action] || a.path.localeCompare(b.path));
   }
 
-  /** Block appended to the final answer; the chat renders it as a card. Empty when nothing changed. */
-  marker(): string {
+  /**
+   * Block appended to the final answer; the chat renders it as a card. Empty when nothing changed.
+   * With `run` (a saved checkpoint) the card can undo the run.
+   */
+  marker(run?: string): string {
     const files = this.list();
-    return files.length ? `\n\n:::changes\n${JSON.stringify(files)}\n:::` : '';
+    if (!files.length) return '';
+    return `\n\n:::changes\n${JSON.stringify(run ? { run, files } : files)}\n:::`;
   }
 }
 

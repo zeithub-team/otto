@@ -17,9 +17,9 @@ export { HttpError, errorMessage } from './http';
 /** Directories hidden from every listing / search, whatever the project type. */
 export const SKIP_DIRS = ['.git', '.next', 'node_modules', '.venv'];
 
-/** Tooling caches and editor state — never project content. */
+/** Tooling caches and editor state — never project content (.otto: Otto's checkpoints and settings). */
 const COMMON_SKIP = [
-  ...SKIP_DIRS, 'venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache',
+  ...SKIP_DIRS, '.otto', 'venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache',
   '.cache', '.turbo', '.output', '.idea', '.vscode', '.gradle', '.dart_tool',
 ];
 
