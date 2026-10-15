@@ -74,12 +74,19 @@ function projectFolder(deps: Deps, projectId: number): string {
   return resolved;
 }
 
-const WRITE_OK = /^(File CREATED|File overwritten|Appended to|Deleted )/;
+const WRITE_OK = /^(File CREATED|File overwritten|Appended to|Replaced in|Deleted )/;
+/** A command or Docker action that ran and succeeded (a step can be done without changing files). */
+const ranOk = (name: string, output: string): boolean =>
+  (name === 'run_command' || name === 'otto_docker') &&
+  !/^(Otto Docker action failed|Refused|The user declined|Running commands|Commands need|This needs|Repeated call)/.test(output) &&
+  !/\((exit code [1-9]|exit code unknown|stopped: time limit)/.test(output);
 
 interface DriveResult {
   text: string;
   error: string | null;
   changed: string[];
+  /** A command / Docker action succeeded during the step. */
+  ran: boolean;
 }
 
 /** Runs one headless agent turn to completion. */
@@ -103,7 +110,7 @@ async function drive(
     onActivity?: (tool: string, path?: string) => void;
   },
 ): Promise<DriveResult> {
-  const result: DriveResult = { text: '', error: null, changed: [] };
+  const result: DriveResult = { text: '', error: null, changed: [], ran: false };
   // every step is visible in the Agents tab with its live log
   const shown = registerRun({ projectId: opts.projectId, title: opts.title, prompt: opts.prompt, model: opts.model, onStop: opts.onStopAll });
   const stopped = (): boolean => opts.isStopped() || shown.isStopped();
@@ -131,6 +138,7 @@ async function drive(
       shown.log('tool', `${name}(${argStr.slice(0, 120)}) → ${String(output).slice(0, 160)}`);
       const touched = (args as { path?: unknown } | null)?.path;
       opts.onActivity?.(name, typeof touched === 'string' ? touched : undefined);
+      if (ranOk(name, String(output))) result.ran = true;
       if (!WRITE_OK.test(String(output))) return;
       const p = (args as { path?: unknown } | null)?.path;
       if (typeof p === 'string' && !result.changed.includes(p)) result.changed.push(p);
@@ -268,6 +276,10 @@ export function startTaskRun(deps: Deps, taskId: number, model: string | null = 
               );
             }
             if (pasted(out)) out.error = 'Модель не применила изменения: прислала код текстом вместо write_file. Выберите модель посильнее.';
+            // a step is done only when something really happened: Otto stopped a looping model, or the model
+            // only talked (an apology, "skill not found") without changing a file or running a command
+            else if (!out.error && /Otto остановил работу|Otto stopped the run/.test(out.text)) out.error = 'Этап не выполнен: модель пошла по кругу и была остановлена.';
+            else if (!out.error && out.changed.length === 0 && !out.ran) out.error = 'Этап не выполнен: модель не изменила ни одного файла и не выполнила ни одной команды.';
             return { step, out };
           }),
         );

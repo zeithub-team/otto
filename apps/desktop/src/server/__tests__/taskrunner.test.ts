@@ -92,12 +92,29 @@ test('runner skips already finished steps', async () => {
   const done = db.createTask(projectId, 'уже сделано', '', 'user', task.id);
   db.updateTask(done.id, { status: 'done' });
   const todo = db.createTask(projectId, 'осталось', '', 'user', task.id);
-  const ollama = await fakeOllama([{ content: 'ИТОГ: готово' }]);
+  const ollama = await fakeOllama([{ tool_calls: [call('write_file', { path: 'rest.txt', content: 'x' })] }, { content: 'ИТОГ: готово' }]);
   try {
     startTaskRun(deps, task.id);
     await waitFor(() => listTaskRuns(projectId)[0]?.status !== 'running');
-    assert.equal(ollama.requests.length, 1);
+    // only the unfinished step ran (one tool turn + the answer)
+    assert.equal(ollama.requests.length, 2);
     assert.equal(db.getTask(todo.id)!.status, 'done');
+  } finally {
+    await ollama.close();
+    db.close();
+  }
+});
+
+test('a step that only talks (no file changed, no command run) is not ticked off', async () => {
+  const { db, projectId, deps } = setup();
+  const task = db.createTask(projectId, 'T', '', 'user');
+  const step = db.createTask(projectId, 'шаг', '', 'user', task.id);
+  const ollama = await fakeOllama([{ content: 'Извините, навык не найден.' }]);
+  try {
+    startTaskRun(deps, task.id);
+    await waitFor(() => listTaskRuns(projectId)[0]?.status !== 'running');
+    assert.equal(db.getTask(step.id)!.status, 'todo');
+    assert.equal(listTaskRuns(projectId)[0].status, 'error');
   } finally {
     await ollama.close();
     db.close();

@@ -17,6 +17,8 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Agent: a large file is not rewritten before the model has read it, and a rewrite that throws most of a file away has to be confirmed',
       'Agent: every run can be undone — "Undo" on the files card puts the files back as they were before the answer',
       'Agent: one loop watch for every model and mode — repeated calls are answered without running again, and a run that goes in circles is stopped with an honest summary instead of using up all its steps',
+      'Tasks: a step is ticked off only when it really changed a file or ran a command — a stopped or apologising model leaves it unchecked to retry',
+      'Agent: a missing skill or a failing command is no longer a reason to give up — the model is told to go on and fix the cause itself',
       'Agent: existing files are edited in place (replace_in_file) instead of being rewritten whole; the reminder after each step no longer piles up in the context',
     ],
   },
