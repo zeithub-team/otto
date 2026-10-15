@@ -159,3 +159,20 @@ test('a model that falls into repeating itself is asked again instead of failing
     await ollama.close();
   }
 });
+
+test('an empty answer after tool work asks for the summary instead of showing an error', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'otto-empty-'));
+  fs.writeFileSync(path.join(root, 'a.txt'), 'hi\n');
+  const ollama = await fake([
+    [{ message: { role: 'assistant', content: '', tool_calls: [{ function: { name: 'read_file', arguments: { path: 'a.txt' } } }] }, done: false }, { message: { role: 'assistant', content: '' }, done: true }],
+    [{ message: { role: 'assistant', content: '' }, done: true }],
+    [{ message: { role: 'assistant', content: 'Итог: файл прочитан.' }, done: false }, { message: { role: 'assistant', content: '' }, done: true }],
+  ]);
+  try {
+    const chunks = await run(root);
+    assert.ok(!chunks.some((c) => c.isError));
+    assert.match(chunks[chunks.length - 1].content, /Итог/);
+  } finally {
+    await ollama.close();
+  }
+});

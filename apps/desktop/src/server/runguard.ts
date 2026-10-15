@@ -130,6 +130,9 @@ export class LoopGuard {
   private failures = 0;
   private refusals = 0;
   private reverts = 0;
+  /** Reads in a row with no change and no command: a model exploring instead of working. */
+  private readStreak = 0;
+  private readNudged = 0;
   private stop: string | null = null;
 
   constructor(private readonly root: string, private readonly limits: LoopLimits = DEFAULT_LIMITS) {}
@@ -188,6 +191,7 @@ export class LoopGuard {
     });
     this.calls++;
     this.refusals = 0;
+    this.readStreak = kind === 'read' ? this.readStreak + 1 : 0;
     let progress: boolean;
     if (kind === 'write') {
       progress = !failed && !/^No change/.test(result);
@@ -204,6 +208,16 @@ export class LoopGuard {
     if (this.failures >= this.limits.failures) this.stop = `${this.failures} tool calls in a row failed`;
     else if (this.idle >= this.limits.idle) this.stop = `${this.idle} steps in a row brought nothing new`;
     else if (this.reverts >= 2) this.stop = 'files keep switching back to earlier versions';
+  }
+
+  /**
+   * A push for a model that only reads (15 reads in a row, then every 10 more): it should start the
+   * change now. Null when there is nothing to say.
+   */
+  readNudge(): string | null {
+    if (this.readStreak < 15 + this.readNudged * 10) return null;
+    this.readNudged++;
+    return `You have read ${this.readStreak} files/results in a row without changing anything. You have enough context: start the actual change now (replace_in_file / write_file / run_command). If the task is only a question, answer it.`;
   }
 
   /** A file that goes back to a version it already had in this run: the model undoes its own work. */

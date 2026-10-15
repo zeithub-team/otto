@@ -1593,6 +1593,8 @@ ${webRules}Порядок работы:
   // "starting… done" without a single tool call: nothing happened, send the model back once
   let toolCallsTotal = 0;
   let actionNudges = 0;
+  // an empty final answer after real work: the model is asked once for its summary
+  let emptyNudges = 0;
   // files the request names that were never written: the model is sent back once
   let missingNudges = 0;
   // a page made by a local model is checked for a finished look; up to two polish rounds
@@ -1942,6 +1944,22 @@ ${webRules}Порядок работы:
           const finalText = (
             (accumulated ? accumulated + '\n\n' : '') + extraction.cleaned
           ).replace(/\s+$/, '');
+          // the model worked (read, wrote) and then said nothing: ask once for the summary instead of an error
+          if (!finalText && toolCallsTotal > 0 && emptyNudges < 1 && step < stepLimit - 1) {
+            emptyNudges++;
+            messages.push({ role: 'assistant', content: contentParts.join('') || '{"action":"answer"}' });
+            messages.push({
+              role: 'user',
+              content: 'Your reply was empty. If the task is not finished, continue it with the tools now. If it is finished, answer with a short summary for the user: what was changed (only what the tools confirmed) and what is left.',
+            });
+            continue;
+          }
+          if (!finalText && toolCallsTotal > 0) {
+            // still nothing: report the run itself rather than an error card
+            const card = changesCard();
+            yield assistantChunk(notice(card ? 'loopStopped' : 'emptyAnswer', options.prompt) + card, msgId, ts, pid, false, toolsEnabled);
+            return;
+          }
           if (!finalText) {
             yield err(notice('emptyAnswer', options.prompt));
             return;
@@ -2132,6 +2150,8 @@ ${webRules}Порядок работы:
         console.warn(`[agent] ${activeModel} stopped: ${loop.stopReason}`);
         break;
       }
+      const pushToWork = loop.readNudge();
+      if (pushToWork) messages.push({ role: 'user', content: pushToWork });
       // Continuation nudge: small models often read one tool result and
       // "answer" mid-task (summarizing search output instead of editing).
       // A standing system reminder after every tool batch keeps the loop

@@ -193,3 +193,12 @@ test('the changes card names the run it can undo', () => {
   assert.match(t.marker('msg-3'), /"run":"msg-3"/);
   assert.match(t.marker(), /^\n\n:::changes\n\[/);
 });
+
+test('a model that only reads is pushed to start working', () => {
+  const guard = new LoopGuard(tmpProject());
+  for (let i = 0; i < 14; i++) guard.after('read_file', { path: `f${i}.php` }, `c${i}`);
+  assert.equal(guard.readNudge(), null);
+  guard.after('read_file', { path: 'f14.php' }, 'c14');
+  assert.match(guard.readNudge() ?? '', /start the actual change/);
+  assert.equal(guard.readNudge(), null);
+});
