@@ -245,6 +245,13 @@ export function stepPrompt(
   return parts.filter(Boolean).join('\n\n');
 }
 
+/** The step's summary says it is not done ("Итог этапа 20 (не завершен)", "not finished", "осталось сделать…"). */
+export function saysUnfinished(text: string): boolean {
+  const head = text.replace(/:::changes[\s\S]*?:::/g, '').slice(0, 400);
+  return /\b(не\s+(завершен|завершён|выполнен|доделан|готов)|не\s+удалось\s+(завершить|доделать)|not\s+(finished|complete|completed|done)|incomplete|unfinished)\b/i.test(head) ||
+    /(не\s+(завершен|завершён|выполнен|доделан))/i.test(head);
+}
+
 /** Result of a step's check command. */
 interface CheckResult { ok: boolean; skipped: string | null; output: string }
 
@@ -376,6 +383,19 @@ export function startTaskRun(deps: Deps, taskId: number, model: string | null = 
             // only talked (an apology, "skill not found") without changing a file or running a command
             else if (!out.error && /Otto остановил работу|Otto stopped the run/.test(out.text)) out.error = 'Этап не выполнен: модель пошла по кругу и была остановлена.';
             else if (!out.error && out.changed.length === 0 && !out.ran) out.error = 'Этап не выполнен: модель не изменила ни одного файла и не выполнила ни одной команды.';
+            // the model's own word that the step is unfinished outweighs the files it touched: one more go, then stop
+            if (!out.error && saysUnfinished(out.text) && !run.stopped) {
+              const again = await attempt(
+                `\n\nВ прошлый раз ты сам написал, что этап НЕ завершён:\n${out.text.slice(0, 1200)}\nДоделай именно этот этап до конца (файлы уже частично есть — читай их и дописывай).`,
+                6,
+              );
+              if (again.error) out.error = again.error;
+              else {
+                out.changed.push(...again.changed.filter((f) => !out.changed.includes(f)));
+                out.text = again.text;
+                if (saysUnfinished(out.text)) out.error = `Этап не выполнен: модель сама сообщает, что он не завершён.\n${out.text.slice(0, 600)}`;
+              }
+            }
             // the step's own check decides, not the model's words: a failed check goes back with its output (twice)
             let verdict: CheckResult = { ok: true, skipped: 'no check', output: '' };
             if (!out.error && check) {

@@ -6,7 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import type { AddressInfo } from 'net';
 import { Db } from '../db';
-import { listTaskRuns, startTaskPlan, startTaskRun, stepPrompt } from '../taskrunner';
+import { listTaskRuns, saysUnfinished, startTaskPlan, startTaskRun, stepPrompt } from '../taskrunner';
 import { stepDetail } from '../steps';
 import { configureAppSettings } from '../appconfig';
 // these tests exercise the native tool-calling loop (guided mode has its own tests: guided.test.ts)
@@ -255,6 +255,32 @@ test('planning only plans: no file is written, and the run ends as soon as the p
     assert.deepEqual(steps.map((s) => s.title), ['[Каркас] Записать .otto/blueprint.md', '[Бэкенд] Модуль книг']);
     assert.match(steps[1].detail, /after: 1/);
     assert.match(steps[1].detail, /check: npx tsc --noEmit/);
+  } finally {
+    await ollama.close();
+    db.close();
+  }
+});
+
+test('a step the model itself calls unfinished is not ticked off', async () => {
+  assert.equal(saysUnfinished('## Итог этапа 20 (не завершен) **Что сделано**'), true);
+  assert.equal(saysUnfinished('Stage is not finished: API returns 500'), true);
+  assert.equal(saysUnfinished('ИТОГ: каталог готов, проверено в браузере'), false);
+  assert.equal(saysUnfinished('ИТОГ: исправлено. Ошибка «не завершён запрос» больше не появляется'), true, 'cautious: such wording gets one more look');
+  const { db, projectId, deps } = setup();
+  const task = db.createTask(projectId, 'T', '', 'user');
+  const step = db.createTask(projectId, 'Каталог', '', 'user', task.id);
+  const ollama = await fakeOllama([
+    { tool_calls: [call('write_file', { path: 'catalog.html', content: '<h1>Каталог</h1>' })] },
+    { content: 'Итог этапа (не завершен): API отвечает 500' },
+    { tool_calls: [call('write_file', { path: 'catalog.js', content: 'export const ok = 1;\n' })] },
+    { content: 'ИТОГ: каталог доделан' },
+  ]);
+  try {
+    startTaskRun(deps, task.id);
+    await waitFor(() => listTaskRuns(projectId)[0]?.status !== 'running');
+    assert.equal(db.getTask(step.id)!.status, 'done');
+    assert.match(ollama.requests[2].messages.find((m) => m.role === 'user')!.content, /сам написал, что этап НЕ завершён/);
+    assert.match(db.getTask(step.id)!.detail, /каталог доделан/);
   } finally {
     await ollama.close();
     db.close();
