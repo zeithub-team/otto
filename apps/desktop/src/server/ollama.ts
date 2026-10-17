@@ -136,14 +136,17 @@ async function describeImages(model: string, images: string[], userPrompt: strin
         images,
       },
     ],
+    // a thinking model (Tiel, Qwen3.6) spent the whole budget reasoning about the long format and wrote no
+    // description: no reasoning here, it is a plain "look and describe" job
+    ...(await modelHas(model, 'thinking', null) ? { effort: 'off' } : {}),
     // big screenshots tokenize into thousands of image tokens
-    options: { temperature: 0.2, num_predict: 2048, repeat_penalty: 1.2, num_ctx: 32768 },
+    options: { temperature: 0.2, num_predict: 4096, repeat_penalty: 1.2, num_ctx: 32768 },
   });
   if (res.status !== 200) {
     throw new Error(humanizeOllamaError(res.status, await res.text(), model));
   }
-  const data = (await res.json()) as { message?: { content?: string } };
-  return (data.message?.content ?? '').trim();
+  const data = (await res.json()) as { message?: { content?: string; thinking?: string } };
+  return ((data.message?.content ?? '').trim() || (data.message?.thinking ?? '').trim());
 }
 
 /** Does a message carry a template/sample (HTML document, code block)? */
