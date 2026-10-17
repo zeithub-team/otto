@@ -44,6 +44,37 @@ export const setReadLimit = (chars: number): void => { readLimit = chars; };
 // (.otto holds Otto's own files: checkpoints with old copies of the project's files)
 const TOOL_SKIP_DIRS = new Set(['.git', '.next', 'node_modules', '.venv', '.otto']);
 
+/**
+ * Files that must not be deleted by the agent — doing so breaks the project and is
+ * almost always a model mistake. Returns a human-readable reason, or null if the file
+ * is not protected. Only the basename is checked: the protection applies at any depth.
+ */
+export function isProtectedFile(rel: string): string | null {
+  const base = rel.replace(/\\/g, '/').split('/').pop()!.toLowerCase();
+  const CRITICAL: Record<string, string> = {
+    // JS / Node
+    'package.json': 'npm manifest', 'package-lock.json': 'npm lockfile', 'yarn.lock': 'yarn lockfile',
+    'pnpm-lock.yaml': 'pnpm lockfile', 'tsconfig.json': 'TypeScript config',
+    // PHP / Laravel
+    'composer.json': 'Composer manifest', 'composer.lock': 'Composer lockfile', 'artisan': 'Laravel CLI',
+    // Python
+    'pyproject.toml': 'Python project config', 'setup.py': 'Python setup', 'setup.cfg': 'Python setup',
+    'requirements.txt': 'pip dependencies', 'pipfile': 'Pipfile', 'pipfile.lock': 'Pipfile lock',
+    'poetry.lock': 'Poetry lockfile',
+    // Ruby
+    'gemfile': 'Bundler manifest', 'gemfile.lock': 'Bundler lockfile', 'rakefile': 'Rake tasks',
+    // Go / Rust / Java
+    'go.mod': 'Go module', 'go.sum': 'Go checksum', 'cargo.toml': 'Rust manifest', 'cargo.lock': 'Rust lockfile',
+    'pom.xml': 'Maven POM', 'build.gradle': 'Gradle build', 'build.gradle.kts': 'Gradle build',
+    // Environment & config
+    '.env': 'environment config', '.env.local': 'local env config',
+    '.gitignore': 'Git ignore rules', '.dockerignore': 'Docker ignore rules',
+    'dockerfile': 'Docker build', 'docker-compose.yml': 'Docker Compose', 'docker-compose.yaml': 'Docker Compose',
+    'makefile': 'make targets',
+  };
+  return CRITICAL[base] ?? null;
+}
+
 /** Read-only tools eligible for repeat short-circuiting in the agent loop. */
 export const READ_ONLY_TOOLS = new Set([
   'read_skill_file',
@@ -458,7 +489,13 @@ export function runTool(
     const target = safePath(root, relativePath);
     if (target === root) return 'Refusing to delete the project root';
     if (!fs.existsSync(target)) return 'Path not found';
+    const rel = relativePosix(root, target);
     const wasDir = fs.statSync(target).isDirectory();
+    // Protect critical project files: deleting these breaks the project and is almost always a mistake.
+    if (!wasDir) {
+      const blocked = isProtectedFile(rel);
+      if (blocked) return `REJECTED: ${rel} is a critical project file (${blocked}) and must not be deleted. If you need to change it, use replace_in_file.`;
+    }
     let removedLines = 0;
     if (!wasDir && fs.statSync(target).size <= MAX_FILE_SIZE) {
       try {
@@ -468,7 +505,7 @@ export function runTool(
       }
     }
     fs.rmSync(target, { recursive: true, force: true });
-    return `Deleted ${wasDir ? 'folder' : 'file'}: ${relativePosix(root, target)}${wasDir ? '' : deltaTag(0, removedLines)}`;
+    return `Deleted ${wasDir ? 'folder' : 'file'}: ${rel}${wasDir ? '' : deltaTag(0, removedLines)}`;
   }
 
   if (name === 'create_task') {

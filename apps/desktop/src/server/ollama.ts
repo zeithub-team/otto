@@ -23,6 +23,7 @@ import { ChangeTracker, deltaTag, lineDelta, stripChangesMarker, ThinkSplitter }
 import { compactMessages, readLimitChars } from './context';
 import { EditSession, isFailure, LoopGuard, toolKind } from './runguard';
 import { Checkpoint } from './checkpoints';
+import { modelProfile, recommendedContext, recommendedTemperature, shouldUseGuided } from './modelcaps';
 import { compareEntries, normalizeToolCall, READ_ONLY_TOOLS, runTool, safePath, setReadLimit, SHELL_NAME, strLen, workspaceTools } from './workspacetools';
 // (tests and other modules import these from here)
 export { normalizeToolCall, runTool, writeWarnings } from './workspacetools';
@@ -1511,10 +1512,11 @@ ${webRules}Порядок работы:
 
   // Guided mode for local models (guided.ts): one JSON action per turn, constrained by a schema, with
   // only the tools this request needs and a short prompt. Works for models without the tools API too.
+  // The model capability registry (modelcaps.ts) decides which models need guided vs. native tools.
   const localMode = String(process.env.OTTO_LOCAL_MODE || live<string>('agent.localMode') || 'auto');
-  // Ollama's cloud models (kimi-k3:cloud, …) are big hosted models: they call tools natively
-  const ollamaCloud = /[:-]cloud$/i.test(String(activeModel));
-  const guided = toolsEnabled && !providerForModel(String(activeModel)) && localMode !== 'native' && (localMode === 'guided' || !ollamaCloud);
+  const isLocal = !providerForModel(String(activeModel));
+  const guided = toolsEnabled && isLocal && shouldUseGuided(String(activeModel), localMode);
+  const profile = isLocal ? modelProfile(String(activeModel)) : null;
   let guidedFormat: Record<string, unknown> | null = null;
   let guidedBad = 0;
   if (guided) {
@@ -1553,16 +1555,15 @@ ${webRules}Порядок работы:
     // Agent mode (tools on) runs at low temperature: qwen3-coder at 0.7
     // wanders between tools and hallucinates success; 0.4 keeps tool calls
     // disciplined without breaking free-form chat (still 0.7 when tools off).
-    temperature: typeof options.temperature === 'number' ? options.temperature : guided ? 0.2 : toolsEnabled ? 0.4 : 0.7,
+    temperature: typeof options.temperature === 'number' ? options.temperature : isLocal ? recommendedTemperature(String(activeModel), toolsEnabled) : toolsEnabled ? 0.4 : 0.7,
     // Tool mode needs room for a whole file inside one write_file call;
     // a cut-off call is lost, so it gets a bigger budget (and is detected below).
-    num_predict: toolsEnabled ? (guided ? 8192 : 16384) : 8192,
+    num_predict: toolsEnabled ? (profile ? Math.min(profile.maxOutput, guided ? 8192 : 16384) : 16384) : 8192,
     repeat_penalty: 1.1,
-    // Ollama's default num_ctx (4096) silently drops the OLDEST messages once
-    // system prompt + project tree + tool results accumulate — the task and
-    // the rules fall out of context and the model loops aimlessly. 32K keeps
-    // a whole agent run in view.
-    ...(toolsEnabled ? { num_ctx: options.numCtx && options.numCtx >= 2048 ? options.numCtx : live<number>('agent.numCtx') } : {}),
+    // Use the model capability registry's recommendation for context window,
+    // falling back to the user setting or a safe default. Small models with
+    // over-allocated context run slower and use more VRAM for no benefit.
+    ...(toolsEnabled ? { num_ctx: options.numCtx && options.numCtx >= 2048 ? options.numCtx : (isLocal ? recommendedContext(String(activeModel)) : live<number>('agent.numCtx')) } : {}),
   };
   if (!toolsEnabled && visionMode) {
     // vision: large screenshots tokenize into thousands of image tokens —
@@ -1733,7 +1734,7 @@ ${webRules}Порядок работы:
         ) {
           runnerCrashRetries++;
           const ctx = typeof sampling.num_ctx === 'number' ? sampling.num_ctx : 8192;
-          sampling = { ...sampling, num_ctx: Math.max(8192, Math.floor(ctx / 2)) };
+          sampling = { ...sampling, num_ctx: Math.max(2048, Math.floor(ctx / 2)) };
           await new Promise((resolve) => setTimeout(resolve, 2000));
           continue;
         }

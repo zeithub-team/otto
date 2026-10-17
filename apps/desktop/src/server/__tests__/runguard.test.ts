@@ -8,6 +8,9 @@ import { syntaxProblems, vetWrite } from '../codecheck';
 import { EditSession, isFailure, LoopGuard } from '../runguard';
 import { Checkpoint, hasCheckpoint, restoreCheckpoint } from '../checkpoints';
 import { ChangeTracker } from '../changes';
+import { isProtectedFile } from '../workspacetools';
+import { modelProfile, shouldUseGuided, recommendedContext, recommendedTemperature } from '../modelcaps';
+import { compactMessages, ChatMessage } from '../context';
 
 const tmpProject = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'otto-guard-'));
 const read = (root: string, rel: string): string => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -201,4 +204,100 @@ test('a model that only reads is pushed to start working', () => {
   guard.after('read_file', { path: 'f14.php' }, 'c14');
   assert.match(guard.readNudge() ?? '', /start the actual change/);
   assert.equal(guard.readNudge(), null);
+});
+
+// --------------------------------------------------------- protected files --
+
+test('critical project files cannot be deleted by the agent', () => {
+  assert.match(isProtectedFile('.env') ?? '', /environment/);
+  assert.match(isProtectedFile('composer.json') ?? '', /Composer/);
+  assert.match(isProtectedFile('package.json') ?? '', /npm/);
+  assert.match(isProtectedFile('Gemfile') ?? '', /Bundler/);
+  assert.match(isProtectedFile('go.mod') ?? '', /Go/);
+  assert.match(isProtectedFile('Cargo.toml') ?? '', /Rust/);
+  assert.match(isProtectedFile('Dockerfile') ?? '', /Docker/);
+  assert.match(isProtectedFile('.gitignore') ?? '', /Git/);
+  assert.equal(isProtectedFile('src/app.ts'), null);
+  assert.equal(isProtectedFile('README.md'), null);
+  assert.equal(isProtectedFile('database/migrations/001.php'), null);
+});
+
+test('delete_file refuses to delete a protected file', () => {
+  const root = tmpProject();
+  fs.writeFileSync(path.join(root, '.env'), 'APP_KEY=test');
+  fs.writeFileSync(path.join(root, 'package.json'), '{}');
+  assert.match(runTool(root, 'delete_file', { path: '.env' }), /^REJECTED/);
+  assert.equal(fs.existsSync(path.join(root, '.env')), true);
+  assert.match(runTool(root, 'delete_file', { path: 'package.json' }), /^REJECTED/);
+  assert.equal(fs.existsSync(path.join(root, 'package.json')), true);
+  // but a regular file can still be deleted
+  fs.writeFileSync(path.join(root, 'tmp.txt'), 'hello');
+  assert.match(runTool(root, 'delete_file', { path: 'tmp.txt' }), /^Deleted/);
+  assert.equal(fs.existsSync(path.join(root, 'tmp.txt')), false);
+});
+
+// ------------------------------------------------------------ model caps --
+
+test('model capability registry returns correct profiles for known families', () => {
+  const tiel = modelProfile('hf.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF:UD-IQ4_XS');
+  assert.equal(tiel.family, 'tiel');
+  assert.equal(tiel.nativeTools, true);
+
+  const qwen25 = modelProfile('qwen2.5-coder:14b');
+  assert.equal(qwen25.family, 'qwen2.5-coder');
+  assert.equal(qwen25.nativeTools, false); // guided mode
+
+  const qwen3 = modelProfile('qwen3.5:9b');
+  assert.equal(qwen3.family, 'qwen3-coder');
+  assert.equal(qwen3.nativeTools, true); // native tools
+
+  const gemma = modelProfile('gemma4:12b');
+  assert.equal(gemma.family, 'gemma4');
+  assert.equal(gemma.nativeTools, true);
+
+  const deepseek = modelProfile('deepseek-r1:8b');
+  assert.equal(deepseek.family, 'deepseek-r1');
+  assert.equal(deepseek.nativeTools, false);
+
+  const unknown = modelProfile('some-random-model:7b');
+  assert.equal(unknown.family, 'unknown');
+  assert.equal(unknown.nativeTools, false); // conservative default
+});
+
+test('shouldUseGuided respects user override and model capability', () => {
+  // User forces guided
+  assert.equal(shouldUseGuided('qwen3.5:9b', 'guided'), true);
+  // User forces native
+  assert.equal(shouldUseGuided('qwen2.5-coder:14b', 'native'), false);
+  // Auto: qwen2.5-coder → guided (no native tools)
+  assert.equal(shouldUseGuided('qwen2.5-coder:14b', 'auto'), true);
+  // Auto: qwen3.5 → native (has native tools)
+  assert.equal(shouldUseGuided('qwen3.5:9b', 'auto'), false);
+  // Auto: Tiel → native
+  assert.equal(shouldUseGuided('hf.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF:UD-IQ4_XS', 'auto'), false);
+  // Cloud models always native
+  assert.equal(shouldUseGuided('kimi-k3:cloud', 'auto'), false);
+});
+
+test('compaction preserves first line and errors from tool results', () => {
+  const msgs: ChatMessage[] = [
+    { role: 'system', content: 'system prompt' },
+    { role: 'tool', content: 'File overwritten: src/app.ts (2400 bytes)\n' + 'x'.repeat(2000), tool_name: 'write_file' },
+    { role: 'tool', content: 'REJECTED: .env is a critical project file\nError: cannot delete protected file\n' + 'y'.repeat(2000), tool_name: 'delete_file' },
+    { role: 'user', content: 'continue' },
+  ];
+  const shrunk = compactMessages(msgs, 500, 1, 0.1);
+  assert.ok(shrunk >= 2);
+  assert.match(msgs[1].content, /File overwritten: src\/app\.ts/);
+  assert.match(msgs[2].content, /REJECTED/);
+  assert.match(msgs[2].content, /cannot delete protected file/);
+});
+
+test('recommended context and temperature vary by model', () => {
+  assert.equal(recommendedContext('qwen2.5-coder:14b'), 32768);
+  assert.equal(recommendedContext('some-tiny:1b'), 4096); // tiny model gets capped context
+  assert.ok(recommendedTemperature('qwen2.5-coder:14b', true) <= 0.3);
+  assert.ok(recommendedTemperature('qwen3.5:9b', true) >= 0.3);
+  // Chat (tools off) is warmer
+  assert.ok(recommendedTemperature('qwen2.5-coder:14b', false) > recommendedTemperature('qwen2.5-coder:14b', true));
 });

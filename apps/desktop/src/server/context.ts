@@ -48,11 +48,26 @@ export const readLimitChars = (ctxTokens: number): number => Math.max(6000, Math
 
 const STUB_AFTER = 700;
 
+/** Extract the key information from a tool result before stubbing it: file path, status, errors. */
+function toolResultStub(content: string, toolName: string | undefined): string {
+  const tool = toolName ?? 'инструмент';
+  const len = content.length;
+  // Preserve the first line (usually a status like "File overwritten: x.ts (500 bytes)" or an error)
+  const firstLine = content.split('\n')[0].trim().slice(0, 200);
+  // Preserve error lines
+  const errors = content.split('\n').filter((l) => /error|ошибка|failed|REJECTED|not found/i.test(l)).slice(0, 3).map((l) => l.trim().slice(0, 150));
+  const errorNote = errors.length ? `\nОшибки: ${errors.join('; ')}` : '';
+  return `[результат убран: ${tool}, ${len} симв. — ${firstLine}${errorNote} — вызови снова, если нужно]`;
+}
+
 /**
  * Replace old bulky tool payloads (results and written file bodies) with short
  * stubs. The system prompt, the history and the current task (first user
  * message of this run) plus the last `keepRecent` messages stay intact.
  * Returns how many messages were shrunk.
+ *
+ * Key improvements: stubs now preserve the first line (file path, status) and
+ * any error lines, so the model knows what happened without re-reading.
  */
 export function compactMessages(messages: ChatMessage[], ctxTokens: number, keepRecent = 6, threshold = 0.6): number {
   const total = (): number => messages.reduce((sum, m) => sum + (m.content?.length ?? 0) + JSON.stringify(m.tool_calls ?? '').length, 0);
@@ -63,7 +78,7 @@ export function compactMessages(messages: ChatMessage[], ctxTokens: number, keep
   for (let i = 1; i < limit; i++) {
     const m = messages[i];
     if (m.role === 'tool' && m.content.length > STUB_AFTER && !m.content.startsWith('[результат убран')) {
-      m.content = `[результат убран для экономии контекста: ${m.tool_name ?? 'инструмент'}, ${m.content.length} симв. — вызови снова, если нужно]`;
+      m.content = toolResultStub(m.content, m.tool_name);
       shrunk++;
     } else if (m.role === 'assistant' && m.tool_calls) {
       for (const call of m.tool_calls) {

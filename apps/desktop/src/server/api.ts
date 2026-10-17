@@ -28,6 +28,7 @@ import { listSchema, runQuery, tableRows, type DbConn } from './dbclient';
 import { checkoutBranch, cloneRepo, listBranches, listOwners, listRepos, validateToken } from './git';
 import { projectNav } from './nav';
 import { startAgent, listAgents, getAgent, stopAgent, deleteAgent } from './agents';
+import { modelProfile, shouldUseGuided } from './modelcaps';
 import { markSetupDone, readSetup } from './setup';
 import { allSkills, isSkillOn, librarySkills, profileDisabled, profileKey, skillChoice } from './skills';
 import { applyLiveSettings, saveSettings, snapshot } from './appconfig';
@@ -195,6 +196,7 @@ const ROUTES: RouteSpec[] = [
   { path: '/api/db/table', methods: ['POST'] },
   { path: '/api/db/query', methods: ['POST'] },
   { path: '/api/models/catalog', methods: ['GET'] },
+  { path: '/api/models/caps', methods: ['GET'] },
   { path: '/api/models/pull', methods: ['POST'] },
   { path: '/api/models/delete', methods: ['POST'] },
   { path: '/api/env/status', methods: ['GET'] },
@@ -978,6 +980,15 @@ export async function handleApi(
     if (pathname === '/api/models/catalog') {
       if (method !== 'GET') return false;
       sendJson(res, 200, FREE_MODEL_CATALOG);
+      return true;
+    }
+    if (pathname === '/api/models/caps') {
+      if (method !== 'GET') return false;
+      const model = q.get('model') ?? '';
+      if (!model) { sendJson(res, 400, { error: 'model required' }); return true; }
+      const profile = modelProfile(model);
+      const guided = shouldUseGuided(model, 'auto');
+      sendJson(res, 200, { ...profile, guided, model });
       return true;
     }
     if (pathname === '/api/models/pull') {
