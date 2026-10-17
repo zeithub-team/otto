@@ -54,6 +54,20 @@ export function commandExitCode(result: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
+const CHECK_KINDS = /\b(test|phpunit|pest|jest|vitest|pytest|build|tsc|lint|eslint|migrate|check)\b/gi;
+
+/**
+ * Does a passing `next` prove the failed `failed` check fixed? Only the same command or one of the same
+ * kind (tests after tests) — `artisan key:generate` passing says nothing about `artisan test`.
+ */
+export function sameCheck(failed: string, next: string): boolean {
+  const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+  if (norm(failed) === norm(next)) return true;
+  const kinds = (s: string) => new Set((s.match(CHECK_KINDS) ?? []).map((k) => k.toLowerCase()));
+  const a = kinds(failed);
+  return [...kinds(next)].some((k) => a.has(k));
+}
+
 /**
  * The run's state as Otto knows it from the tools (not from what the model says): the task, the files
  * really changed and a command that is still failing. Re-sent after old results were compacted away.

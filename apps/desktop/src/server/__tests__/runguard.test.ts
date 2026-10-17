@@ -10,7 +10,8 @@ import { Checkpoint, hasCheckpoint, restoreCheckpoint } from '../checkpoints';
 import { ChangeTracker } from '../changes';
 import { isProtectedFile } from '../workspacetools';
 import { modelProfile, shouldUseGuided, recommendedContext, recommendedTemperature } from '../modelcaps';
-import { commandExitCode, compactMessages, ChatMessage, taskStateNote } from '../context';
+import { commandExitCode, compactMessages, ChatMessage, sameCheck, taskStateNote } from '../context';
+import { onlyCommands, pastedCode } from '../ollama';
 import { describeResult, runCommand } from '../shell';
 
 const tmpProject = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'otto-guard-'));
@@ -317,6 +318,21 @@ test('exit codes and the task state note come from tool results', () => {
   assert.match(note, /php artisan test/);
   assert.match(note, /FAILED BookTest/);
   assert.match(taskStateNote('t', [], null), /Файлы ещё не менялись/);
+});
+
+test('a failed check is cleared only by the same kind of check passing', () => {
+  assert.equal(sameCheck('php artisan test', 'php artisan test'), true);
+  assert.equal(sameCheck('php artisan test', 'php artisan test --filter=BookTest'), true);
+  assert.equal(sameCheck('php artisan test', 'php artisan key:generate --force'), false);
+  assert.equal(sameCheck('npm run build', 'npm run lint'), false);
+  assert.equal(sameCheck('php artisan migrate', 'php artisan migrate:fresh --seed'), true);
+});
+
+test('run instructions in an answer are not mistaken for pasted code', () => {
+  const howTo = 'cd bookshelf\ncomposer install\ncp .env.example .env\nphp artisan key:generate\nphp artisan migrate --seed\nphp artisan serve\n# открой http://127.0.0.1:8000';
+  assert.equal(onlyCommands(howTo), true);
+  assert.equal(pastedCode('Запуск:\n```\n' + howTo + '\n```'), false);
+  assert.equal(pastedCode('```php\n<?php\nclass Book extends Model\n{\n  protected $fillable = [];\n}\n```'), true);
 });
 
 test('recommended context and temperature vary by model', () => {

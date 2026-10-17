@@ -20,7 +20,7 @@ import { applyBaseStyle, CLASSLESS_CSS, designGaps, wantsSite } from './designki
 import { makePlan, planText, wantsPlan } from './planner';
 import { buildSite, ollamaChat, wantsMultiPageSite } from './sitebuilder';
 import { ChangeTracker, deltaTag, lineDelta, stripChangesMarker, ThinkSplitter } from './changes';
-import { commandExitCode, compactMessages, readLimitChars, taskStateNote } from './context';
+import { commandExitCode, compactMessages, readLimitChars, sameCheck, taskStateNote } from './context';
 import { EditSession, isFailure, LoopGuard, toolKind } from './runguard';
 import { Checkpoint } from './checkpoints';
 import { modelProfile, recommendedContext, recommendedTemperature, shouldUseGuided } from './modelcaps';
@@ -668,6 +668,14 @@ function stripToolSyntax(s: string): string {
     .trimStart();
 }
 
+const SHELL_LINE = /^\s*(?:#|(?:\$\s*|>\s*)?(?:npm|npx|pnpm|yarn|bun|php|composer|git|node|python3?|pip|cd|cp|copy|mv|mkdir|ls|dir|docker|cargo|go|dotnet|curl|set|export|source|start|open)\b)/i;
+
+/** "How to run it" in a final answer: every line is a command for the user, not code that belongs in a file. */
+export function onlyCommands(body: string): boolean {
+  const lines = body.split('\n').filter((l) => l.trim());
+  return lines.length > 0 && lines.length <= 15 && lines.every((l) => SHELL_LINE.test(l));
+}
+
 /** A real piece of code in the answer (not a one-line command): it belongs in a file. */
 export function pastedCode(text: string): boolean {
   for (const m of text.matchAll(/```([\w+-]*)\n([\s\S]*?)(?:```|$)/g)) {
@@ -675,6 +683,7 @@ export function pastedCode(text: string): boolean {
     const body = m[2];
     // shell lines for the user to run are fine in the chat
     if (/^(bash|sh|shell|powershell|ps1|cmd|console|text|txt)$/.test(lang) && body.split('\n').length <= 6) continue;
+    if (onlyCommands(body)) continue;
     if (body.split('\n').filter((l) => l.trim()).length >= 4 || body.length >= 200) return true;
   }
   return false;
@@ -711,7 +720,7 @@ function stripCodeBlocks(s: string): string {
   return s
     // a short shell command is fine in the chat (same rule as pastedCode) — it is not a file that was "not written"
     .replace(/```([\w+-]*)\n([\s\S]*?)```/g, (all, lang: string, body: string) =>
-      /^(bash|sh|shell|powershell|ps1|cmd|console)$/i.test(lang) && body.split('\n').length <= 6 ? all : marker)
+      (/^(bash|sh|shell|powershell|ps1|cmd|console)$/i.test(lang) && body.split('\n').length <= 6) || onlyCommands(body) ? all : marker)
     .replace(/```[\s\S]*$/g, marker);
 }
 
@@ -2126,7 +2135,7 @@ ${webRules}Порядок работы:
                 result = describeResult(command, run);
                 const code = commandExitCode(result);
                 if (code !== null && code !== 0) failing = { command, output: run.output };
-                else if (code === 0 && failing && (failing.command === command || /\b(test|build|migrate|artisan|tsc|lint|check)\b/i.test(command))) failing = null;
+                else if (code === 0 && failing && sameCheck(failing.command, command)) failing = null;
               }
               // a dev server the user wants to see: show it in the Preview tab
               const devUrl = options.onUi ? localServerUrl(result) : null;
