@@ -87,6 +87,25 @@ export function isFailure(result: string): boolean {
     /^\$ .*\n\((exit code (?!0\b)|stopped: time limit)/.test(result);
 }
 
+/** A tool result that moved the task on: a file really changed or a command passed. */
+export function madeProgress(name: string, result: string): boolean {
+  const kind = toolKind(name);
+  return (kind === 'write' || kind === 'exec') && !isFailure(result);
+}
+
+/** Hard cap on steps a run may grow to while it keeps making progress. */
+export const STEP_HARD_CAP = 300;
+
+/**
+ * The step limit after `step` (0-based) finished. The configured limit is where a run is checked, not cut:
+ * one that changed files or ran commands in its last `window` steps gets another `limit` steps, up to the
+ * hard cap. A run that only reads or fails stops at the limit (the loop guard stops cycles earlier).
+ */
+export function stepBudget(step: number, limit: number, base: number, lastProgress: number, window = 8): number {
+  if (step < limit - 1 || limit >= STEP_HARD_CAP) return limit;
+  return lastProgress >= 0 && step - lastProgress < window ? Math.min(STEP_HARD_CAP, limit + base) : limit;
+}
+
 const stable = (value: unknown): string => {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
   if (value && typeof value === 'object') {

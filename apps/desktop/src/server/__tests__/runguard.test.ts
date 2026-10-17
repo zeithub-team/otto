@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { runTool } from '../ollama';
 import { syntaxProblems, vetWrite } from '../codecheck';
-import { EditSession, isFailure, LoopGuard } from '../runguard';
+import { EditSession, isFailure, LoopGuard, madeProgress, STEP_HARD_CAP, stepBudget } from '../runguard';
 import { Checkpoint, hasCheckpoint, restoreCheckpoint } from '../checkpoints';
 import { ChangeTracker } from '../changes';
 import { isProtectedFile } from '../workspacetools';
@@ -334,6 +334,24 @@ test('compaction drops written file bodies instead of leaving a copyable placeho
   assert.equal('content' in args, false);
   assert.equal(args.omitted_content_chars, 3000);
   assert.equal(args.path, 'a.php');
+});
+
+test('a run that keeps changing files is not cut off at the step limit, an idle one is', () => {
+  assert.equal(madeProgress('write_file', 'File CREATED (новый файл): src/a.ts'), true);
+  assert.equal(madeProgress('write_file', 'REJECTED: syntax error'), false);
+  assert.equal(madeProgress('read_file', 'export const a = 1;'), false);
+  assert.equal(madeProgress('run_command', '$ npm test\n(exit code 0, 2 s)\nok'), true);
+  assert.equal(madeProgress('run_command', '$ npm test\n(exit code 1, 2 s)\nFAIL'), false);
+  // mid-run: nothing changes
+  assert.equal(stepBudget(10, 40, 40, 9), 40);
+  // last step of the budget, wrote a file 2 steps ago: 40 more
+  assert.equal(stepBudget(39, 40, 40, 37), 80);
+  // last step, but only reads for the last 10 steps: stop
+  assert.equal(stepBudget(39, 40, 40, 29), 40);
+  assert.equal(stepBudget(39, 40, 40, -1), 40);
+  // never beyond the hard cap
+  assert.equal(stepBudget(279, 280, 40, 278), STEP_HARD_CAP);
+  assert.equal(stepBudget(STEP_HARD_CAP - 1, STEP_HARD_CAP, 40, STEP_HARD_CAP - 2), STEP_HARD_CAP);
 });
 
 test('a failed check is cleared only by the same kind of check passing', () => {

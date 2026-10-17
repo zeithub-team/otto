@@ -21,7 +21,7 @@ import { makePlan, planText, wantsPlan } from './planner';
 import { buildSite, ollamaChat, wantsMultiPageSite } from './sitebuilder';
 import { ChangeTracker, deltaTag, lineDelta, stripChangesMarker, ThinkSplitter } from './changes';
 import { commandExitCode, compactMessages, readLimitChars, sameCheck, taskStateNote } from './context';
-import { EditSession, isFailure, LoopGuard, toolKind } from './runguard';
+import { EditSession, isFailure, LoopGuard, madeProgress, stepBudget, toolKind } from './runguard';
 import { Checkpoint } from './checkpoints';
 import { modelProfile, recommendedContext, recommendedTemperature, shouldUseGuided } from './modelcaps';
 import { compareEntries, normalizeToolCall, READ_ONLY_TOOLS, runTool, safePath, setReadLimit, SHELL_NAME, strLen, workspaceTools } from './workspacetools';
@@ -1711,7 +1711,9 @@ ${webRules}Порядок работы:
   }
 
   try {
-    const stepLimit = maxToolSteps();
+    const baseSteps = maxToolSteps();
+    let stepLimit = baseSteps;
+    let lastProgress = -1;
     // the standing reminder after a tool step: one copy, replaced every step (copies used to pile up)
     let reminder: Message | null = null;
     for (let step = 0; step < stepLimit; step++) {
@@ -2057,6 +2059,7 @@ ${webRules}Порядок работы:
         /** What the call returned goes to the loop watch; a write that changed nothing leaves the checkpoint. */
         const record = (out: string): void => {
           loop.after(name, argsObj, out);
+          if (madeProgress(name, out)) lastProgress = step;
           if (target) checkpoint.settle(target);
         };
         if (name !== 'run_command') yield activity('tool_start', name, paths, actId);
@@ -2204,6 +2207,10 @@ ${webRules}Порядок работы:
         console.warn(`[agent] ${activeModel} stopped: ${loop.stopReason}`);
         break;
       }
+      // a long job that keeps changing files is not cut off at the configured step count
+      const grown = stepBudget(step, stepLimit, baseSteps, lastProgress);
+      if (grown !== stepLimit) console.log(`[agent] ${activeModel} still making progress at step ${step + 1}: limit ${stepLimit} → ${grown}`);
+      stepLimit = grown;
       const pushToWork = loop.readNudge();
       if (pushToWork) messages.push({ role: 'user', content: pushToWork });
       // Continuation nudge: small models often read one tool result and
