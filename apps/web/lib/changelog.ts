@@ -22,6 +22,12 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Agent: models no longer copy the "text removed" note of a compacted step into new files',
       'Agent: the "how to run" commands in a final answer are no longer cut out as pasted code',
       'Images: a model that reads pictures and calls tools (Tiel, Qwen3.6, Gemma 4) builds a design from a concept image itself — it no longer fails with "qwen3.6:35b not found" or an empty description',
+      'Tasks: big jobs are planned as 8-40 small steps in phases ([Каркас] → [Бэкенд] → [Docker] → …), with "после: N" dependencies and a check command per step; the first step writes .otto/blueprint.md that every later step follows',
+      'Tasks: each step runs with a compact context of its own — the blueprint, the phases, the results of the steps it needs, the project\'s running containers — and only its own skills, so a 32K local model can work through long plans',
+      'Tasks: a step is ticked off only when its check passes (a failed check goes back to the model with the output) and never when the model itself says it is unfinished; planning writes no files',
+      'Skills: NestJS, Laravel, Docker Compose and PostgreSQL skills with the exact imports and commands models get wrong; the framework a request names gets its skill first',
+      'Agent: a long job that keeps changing files is no longer cut off at the step limit; a model that only reads is stopped, and in a plan step reads are refused after 25 in a row until it writes',
+      'Agent: a broken tool call is asked again, a stub controller/service is reported back, a nested "project/project" folder is refused, UTF-16 logs from PowerShell are readable, `--format` is no longer taken for disk formatting',
     ],
   },
   {
