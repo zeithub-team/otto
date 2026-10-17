@@ -129,9 +129,17 @@ test('steps start when the steps they need are done; independent ones run side b
   // no "после:" anywhere: the old sequence (and ∥ pairs) is kept
   const seq = [st('todo'), st('todo', [], true), st('todo')];
   assert.deepEqual(readyGroup(seq, 4).map((s) => seq.indexOf(s)), [0, 1]);
-  // a reference to a later or missing step never stalls the run
+  // a missing step never stalls the run
   const odd = [st('todo', [9])];
   assert.equal(readyGroup(odd, 1).length, 1);
+  // a step moved behind a later one waits for it (seed after "docker compose up")
+  const moved = [st('done'), st('todo', [3]), st('todo', [1])];
+  assert.deepEqual(readyGroup(moved, 1).map((s) => moved.indexOf(s) + 1), [3]);
+  moved[2].status = 'done';
+  assert.deepEqual(readyGroup(moved, 1).map((s) => moved.indexOf(s) + 1), [2]);
+  // a cycle falls back to the first unfinished step
+  const cyc = [st('todo', [2]), st('todo', [1])];
+  assert.equal(readyGroup(cyc, 1).length, 1);
   assert.deepEqual(dependencies(seq), [[], [], [0, 1]]);
 });
 

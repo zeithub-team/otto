@@ -73,7 +73,8 @@ interface Schedulable { status: string; parallel: boolean; detail?: string | nul
 export function dependencies<T extends Schedulable>(steps: T[]): number[][] {
   const deps: number[][] = [];
   steps.forEach((s, i) => {
-    const declared = afterOf(s.detail).map((n) => n - 1).filter((n) => n >= 0 && n < i);
+    // a step may wait for a later one in the list (moved behind it); a cycle is broken in readyGroup
+    const declared = afterOf(s.detail).map((n) => n - 1).filter((n) => n >= 0 && n < steps.length && n !== i);
     if (declared.length || afterOf(s.detail).length) deps.push(declared);
     else if (s.parallel && i > 0) deps.push(deps[i - 1]);
     else deps.push(Array.from({ length: i }, (_, k) => k));
