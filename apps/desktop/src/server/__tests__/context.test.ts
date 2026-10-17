@@ -48,6 +48,8 @@ test('compaction shrinks old tool payloads but keeps the task and recent steps',
   assert.ok(n >= 2);
   assert.equal(msgs[1].content, 'TASK: build the page');
   assert.match(msgs[3].content, /убран/);
-  assert.match(String((msgs[2].tool_calls?.[0].function?.arguments as { content: string }).content), /записано 20000/);
+  const args = msgs[2].tool_calls?.[0].function?.arguments as Record<string, unknown>;
+  assert.equal('content' in args, false);
+  assert.equal(args.omitted_content_chars, 20000);
   assert.equal(msgs[8].content, 'RECENT');
 });

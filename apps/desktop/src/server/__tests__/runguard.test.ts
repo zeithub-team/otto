@@ -320,6 +320,22 @@ test('exit codes and the task state note come from tool results', () => {
   assert.match(taskStateNote('t', [], null), /Файлы ещё не менялись/);
 });
 
+test('compaction drops written file bodies instead of leaving a copyable placeholder', () => {
+  const body = 'x'.repeat(3000);
+  const call = { function: { name: 'write_file', arguments: { path: 'a.php', content: body } } };
+  const msgs: ChatMessage[] = [
+    { role: 'system', content: 's' },
+    { role: 'assistant', content: '', tool_calls: [call] },
+    { role: 'tool', content: 'File CREATED: a.php', tool_name: 'write_file' },
+    { role: 'user', content: 'go on' },
+  ];
+  compactMessages(msgs, 500, 1, 0.1);
+  const args = call.function.arguments as Record<string, unknown>;
+  assert.equal('content' in args, false);
+  assert.equal(args.omitted_content_chars, 3000);
+  assert.equal(args.path, 'a.php');
+});
+
 test('a failed check is cleared only by the same kind of check passing', () => {
   assert.equal(sameCheck('php artisan test', 'php artisan test'), true);
   assert.equal(sameCheck('php artisan test', 'php artisan test --filter=BookTest'), true);

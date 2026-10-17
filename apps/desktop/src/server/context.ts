@@ -122,8 +122,11 @@ export function compactMessages(messages: ChatMessage[], ctxTokens: number, keep
         const args = call.function?.arguments;
         if (args && typeof args === 'object') {
           const a = args as Record<string, unknown>;
+          // the field is dropped, not replaced: a placeholder text in old calls was copied by models as the
+          // content of their next write_file
           if (typeof a.content === 'string' && a.content.length > STUB_AFTER) {
-            a.content = `[записано ${a.content.length} симв., текст убран для экономии контекста]`;
+            a.omitted_content_chars = a.content.length;
+            delete a.content;
             shrunk++;
           }
         }
