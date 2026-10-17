@@ -19,6 +19,9 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Agent: a command that hits its time limit on Windows no longer leaves npm/php/artisan running in the background',
       'Agent: "done" is not accepted while the last test/build/migrate still fails — the model is shown the failure and has to fix it or say honestly that it still fails',
       'Agent: in long runs the shrunk context keeps the task, the files already changed and the failing check, so the model does not lose track after compaction',
+      'Agent: models no longer copy the "text removed" note of a compacted step into new files',
+      'Agent: the "how to run" commands in a final answer are no longer cut out as pasted code',
+      'Images: a model that reads pictures and calls tools (Tiel, Qwen3.6, Gemma 4) builds a design from a concept image itself — it no longer fails with "qwen3.6:35b not found" or an empty description',
     ],
   },
   {
