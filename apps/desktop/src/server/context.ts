@@ -94,7 +94,11 @@ function toolResultStub(content: string, toolName: string | undefined): string {
   // Preserve error lines
   const errors = content.split('\n').filter((l) => /error|ошибка|failed|REJECTED|not found/i.test(l)).slice(0, 3).map((l) => l.trim().slice(0, 150));
   const errorNote = errors.length ? `\nОшибки: ${errors.join('; ')}` : '';
-  return `[результат убран: ${tool}, ${len} симв. — ${firstLine}${errorNote} — вызови снова, если нужно]`;
+  // not "call it again": models re-read whole files in a loop; only the part needed for the edit
+  const again = tool === 'read_file'
+    ? 'уже прочитан; для правки перечитай ТОЛЬКО нужный кусок (read_file с start_line/end_line), не весь файл'
+    : 'повтори, только если без этого не обойтись';
+  return `[результат убран: ${tool}, ${len} симв. — ${firstLine}${errorNote} — ${again}]`;
 }
 
 /**

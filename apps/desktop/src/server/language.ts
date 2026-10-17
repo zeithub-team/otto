@@ -36,6 +36,11 @@ export function detectLanguage(text: string): DetectedLanguage | null {
   const total = cyr + geo + cjk + kor + ara + heb + lat;
   if (total < 3) return null;
 
+  // technical Russian is full of Latin names (files, classes, commands): a fair share of Cyrillic decides
+  if (cyr >= total * 0.2 && cyr >= Math.max(geo, cjk, kor, ara, heb)) {
+    if (/[іїєґ]/i.test(clean) && !/[ыэъ]/i.test(clean)) return { code: 'uk', name: 'украинский (українська)' };
+    return { code: 'ru', name: 'русский' };
+  }
   const biggest = Math.max(cyr, geo, cjk, kor, ara, heb, lat);
   if (biggest === geo) return { code: 'ka', name: 'грузинский (ქართული)' };
   if (biggest === cjk) return { code: 'zh', name: 'китайский/японский — тот же язык, что у пользователя' };
