@@ -343,6 +343,11 @@ test('a run that keeps changing files is not cut off at the step limit, an idle 
   assert.equal(madeProgress('read_file', 'export const a = 1;'), false);
   assert.equal(madeProgress('run_command', '$ npm test\n(exit code 0, 2 s)\nok'), true);
   assert.equal(madeProgress('run_command', '$ npm test\n(exit code 1, 2 s)\nFAIL'), false);
+  // looking around is not progress, even when it succeeds
+  assert.equal(madeProgress('run_command', '$ Get-ChildItem -Recurse -Path dist -Filter "seed.js"\n(exit code 0, 1 s)\n…'), false);
+  assert.equal(madeProgress('run_command', '$ $src = Get-Content node_modules\\typeorm\\x.js; …\n(exit code 0, 1 s)\n…'), false);
+  assert.equal(madeProgress('run_command', '$ Select-String -Path dist/seed.js -Pattern "entities"\n(exit code 0, 1 s)\n'), false);
+  assert.equal(madeProgress('run_command', '$ npm install\n(exit code 0, 30 s)\nadded 500 packages'), true);
   // mid-run: nothing changes
   assert.equal(stepBudget(10, 40, 40, 9), 40);
   // last step of the budget, wrote a file 2 steps ago: 40 more

@@ -90,8 +90,15 @@ export function isFailure(result: string): boolean {
 /** A tool result that moved the task on: a file really changed or a command passed. */
 export function madeProgress(name: string, result: string): boolean {
   const kind = toolKind(name);
-  return (kind === 'write' || kind === 'exec') && !isFailure(result);
+  if (kind === 'write') return !isFailure(result);
+  if (kind !== 'exec' || isFailure(result)) return false;
+  // a command that only looks around (listing, reading, searching) changes nothing: digging through
+  // node_modules for half an hour is not progress
+  const command = /^\$ (.*)$/m.exec(result)?.[1] ?? '';
+  return !READ_ONLY_COMMAND.test(command);
 }
+
+const READ_ONLY_COMMAND = /^\s*(\$\w+\s*=\s*)?(get-childitem|gci|get-content|gc|select-string|sls|test-path|get-item|ls|dir|cat|type|echo|write-output|where(\.exe)?|which|find|findstr|grep|head|tail|pwd|resolve-path|node\s+(-v|--version)|npm\s+(-v|--version|ls|list|view)|git\s+(status|log|diff|show))\b/i;
 
 /** Hard cap on steps a run may grow to while it keeps making progress. */
 export const STEP_HARD_CAP = 300;

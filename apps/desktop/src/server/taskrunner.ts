@@ -466,7 +466,9 @@ export const PLAN_RULES =
   'Если проверить нечем (README, вёрстка) — без «проверка:».\n' +
   `- ЭТАП 1 всегда: «[Каркас] Записать ${BLUEPRINT}»: стек и версии, дерево папок, ТОЧНЫЕ имена файлов, модулей и классов, ` +
   'поля сущностей, маршруты API, переменные окружения, дизайн-токены. Все остальные этапы следуют этому каркасу.\n' +
-  '- Затем этапы, которые ставят зависимости и конфиг (package.json / composer.json, npm install), — до кода, который их использует.';
+  '- Затем этапы, которые ставят зависимости и конфиг (package.json / composer.json, npm install), — до кода, который их использует.\n' +
+  '- Этап, которому нужна работающая база или сервер (миграции, сид, curl к API, e2e), — «после:» этапа, который их поднимает (docker compose up / serve). ' +
+  'Без базы такие команды не проверить: не ставь их раньше.';
 
 /** Ask the model to break a task into checklist steps (attached to `taskId`). */
 export function startTaskPlan(deps: Deps, taskId: number, model: string | null = null): TaskRun {
