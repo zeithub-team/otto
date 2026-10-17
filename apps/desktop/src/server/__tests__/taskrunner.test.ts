@@ -187,6 +187,8 @@ test('a step gets the blueprint, the phases, the results of the steps it needs �
   assert.match(prompt, /НЕ делай их сейчас\): «\[Docker\] Dockerfile»/);
   assert.match(prompt, /ТОЛЬКО этап 23 из 24: «\[Фронтенд\] Каталог книг»\nЭтап считается выполненным, только когда проходит проверка: `npm run build`/);
   assert.ok(prompt.length < 4000, `stays small (${prompt.length} chars for 24 steps)`);
+  const withDocker = stepPrompt({ title: 'T', detail: null }, steps, steps[22], '', [], 'stranica-db: Up 1 hour (healthy) 5432/tcp');
+  assert.match(withDocker, /Запущенные контейнеры проекта .*свои не поднимай\):\nstranica-db: Up/);
 });
 
 test('a step whose check fails is sent back with the output and done only when the check passes', async () => {

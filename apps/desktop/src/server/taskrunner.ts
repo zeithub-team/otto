@@ -206,6 +206,7 @@ export function stepPrompt(
   step: TaskRow,
   blueprint: string,
   partners: TaskRow[] = [],
+  containers = '',
 ): string {
   const at = steps.indexOf(step);
   const done = steps.filter((s) => s.status === 'done');
@@ -235,6 +236,7 @@ export function stepPrompt(
     needs.length ? `Этот этап опирается на результаты этапов:\n${needs.map((s) => `- ${steps.indexOf(s) + 1}. ${s.title}${result(s)}`).join('\n')}` : '',
     recent.length ? `Последние выполненные:\n${recent.map((s) => `- ${steps.indexOf(s) + 1}. ${s.title}${result(s)}`).join('\n')}` : '',
     files.length ? `Уже созданы/изменены файлы (${files.length}): ${files.slice(0, 60).join(', ')}` : '',
+    containers ? `Запущенные контейнеры проекта (работай с ними, свои не поднимай):\n${containers}` : '',
     partners.length ? `Параллельно с тобой выполняются: ${partners.map((s) => `«${s.title}»`).join(', ')}` : '',
     next.length ? `Следующие этапы (НЕ делай их сейчас): ${next.map((s) => `«${s.title}»`).join('; ')}` : '',
     `Выполни ТОЛЬКО этап ${at + 1} из ${steps.length}: «${step.title}»` +
@@ -266,7 +268,22 @@ const STEP_RULES =
   'Ты выполняешь ОДИН этап плана из чек-листа. Делай только текущий этап, не переходи к следующим и не переделывай ' +
   'выполненные. Учитывай итоги предыдущих этапов (файлы уже созданы — читай их, а не пиши заново). Изменения ' +
   'применяй инструментами (write_file/append_file). В конце — короткий ИТОГ этапа (1-3 предложения): что сделано и ' +
-  'в каких файлах; он будет передан следующим этапам. Не вызывай plan_task.';
+  'в каких файлах; он будет передан следующим этапам. Не вызывай plan_task.\n' +
+  'Работай с сервисами САМОГО проекта (его docker compose: база, приложение — см. «Запущенные контейнеры»): миграции и сид ' +
+  'запускай в них (docker compose exec <сервис> …). НЕ поднимай свои отдельные контейнеры и базы «для проверки» — результат ' +
+  'в них проекту не достаётся. Временные файлы проверок удаляй.';
+
+/**
+ * The project's running containers (compose project = folder name), so a step works with them instead of
+ * starting a database of its own. Empty when Docker is not there.
+ */
+export async function projectContainers(projectPath: string): Promise<string> {
+  const project = path.basename(projectPath).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  if (!project) return '';
+  // no quotes inside the format: PowerShell 5.1 mangles nested quotes in arguments to native programs
+  const r = await runCommand(projectPath, `docker ps --filter "label=com.docker.compose.project=${project}" --format "{{.Names}}: {{.Status}} {{.Ports}}"`, 20);
+  return r.code === 0 ? r.output.trim().split('\n').filter(Boolean).slice(0, 10).join('\n') : '';
+}
 
 /** Run the unfinished steps of a task in order. Returns immediately. */
 export function startTaskRun(deps: Deps, taskId: number, model: string | null = null): TaskRun {
@@ -319,11 +336,12 @@ export function startTaskRun(deps: Deps, taskId: number, model: string | null = 
         const fresh = deps.db.getTask(taskId);
         const goal = { title: fresh?.title ?? task.title, detail: fresh?.detail ?? task.detail };
         const blueprint = readBlueprint(projectPath);
+        const containers = await projectContainers(projectPath).catch(() => '');
         const claims = new FileClaims(); // files the steps of this group have taken
         const results = await Promise.all(
           group.map(async (step) => {
             const partners = group.filter((s) => s.id !== step.id);
-            const prompt = stepPrompt(goal, steps, step, blueprint, partners);
+            const prompt = stepPrompt(goal, steps, step, blueprint, partners, containers);
             const check = checkOf(step.detail);
             const attempt = (extra: string, n: number) => drive(deps, {
               projectId: task.project_id,
