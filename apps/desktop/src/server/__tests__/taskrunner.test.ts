@@ -232,3 +232,29 @@ test('without permission to run commands the check is skipped, never run unasked
     db.close();
   }
 });
+
+test('planning only plans: no file is written, and the run ends as soon as the plan exists', async () => {
+  const { db, projectPath, projectId, deps } = setup();
+  const task = db.createTask(projectId, 'Большой проект', '', 'user');
+  const ollama = await fakeOllama([
+    { tool_calls: [call('write_file', { path: 'early.ts', content: 'export const a = 1;\n' })] },
+    { tool_calls: [call('plan_task', { title: 'Проект', steps: ['[Каркас] Записать .otto/blueprint.md', '[Бэкенд] Модуль книг — после: 1 — проверка: npx tsc --noEmit'] })] },
+    { tool_calls: [call('write_file', { path: 'late.ts', content: 'export const b = 2;\n' })] },
+    { content: 'всё сделал сам' },
+  ]);
+  try {
+    startTaskPlan(deps, task.id);
+    await waitFor(() => listTaskRuns(projectId)[0]?.status !== 'planning');
+    assert.equal(listTaskRuns(projectId)[0].status, 'done');
+    assert.equal(fs.existsSync(path.join(projectPath, 'early.ts')), false, 'nothing written before the plan');
+    assert.equal(fs.existsSync(path.join(projectPath, 'late.ts')), false, 'nothing written after it');
+    assert.equal(ollama.requests.length, 2, 'the model is not asked again after plan_task');
+    const steps = db.listSteps(task.id);
+    assert.deepEqual(steps.map((s) => s.title), ['[Каркас] Записать .otto/blueprint.md', '[Бэкенд] Модуль книг']);
+    assert.match(steps[1].detail, /after: 1/);
+    assert.match(steps[1].detail, /check: npx tsc --noEmit/);
+  } finally {
+    await ollama.close();
+    db.close();
+  }
+});

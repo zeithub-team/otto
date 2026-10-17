@@ -15,7 +15,7 @@ import type { Db, TaskRow } from './db';
 import { generateResponse } from './ollama';
 import { isDirectory, resolvePath } from './paths';
 import { registerRun } from './agents';
-import { FileClaims, PARALLEL_RULES, afterOf, checkOf, parseStep, phaseOf, readyGroup, stepDetail } from './steps';
+import { FileClaims, PARALLEL_RULES, afterOf, checkIssue, checkOf, parseStep, phaseOf, readyGroup, shellCheck, stepDetail } from './steps';
 
 export type RunStatus = 'planning' | 'running' | 'done' | 'error' | 'stopped';
 
@@ -252,11 +252,13 @@ interface CheckResult { ok: boolean; skipped: string | null; output: string }
  */
 async function runCheck(projectPath: string, command: string, isStopped: () => boolean): Promise<CheckResult> {
   if (!command) return { ok: true, skipped: 'no check', output: '' };
+  const issue = checkIssue(command);
+  if (issue) return { ok: true, skipped: issue, output: '' };
   if (normalizeMode(live<string>('agent.shell')) !== 'auto') return { ok: true, skipped: 'commands need approval', output: '' };
   const danger = dangerReason(command);
   if (danger) return { ok: true, skipped: `refused: ${danger}`, output: '' };
   if (isStopped()) return { ok: true, skipped: 'stopped', output: '' };
-  const r = await runCommand(projectPath, command, 300);
+  const r = await runCommand(projectPath, shellCheck(command), 300);
   return { ok: r.code === 0 && !r.timedOut && !r.cancelled, skipped: null, output: describeResult(command, r) };
 }
 
@@ -450,6 +452,8 @@ export function parseListPlan(text: string): string[] {
   return items.slice(0, 40);
 }
 
+const PLANNING_ONLY = 'REJECTED: this run only makes the plan — files are written later, step by step, by the plan itself. Nothing was written. Call plan_task now.';
+
 /** How the planner is asked to break a big job down: phases, small steps, dependencies, checks, a blueprint first. */
 export const PLAN_RULES =
   'Разбей работу на 8-40 МАЛЕНЬКИХ этапов (каждый — 1-3 файла, выполним отдельной моделью со свежим контекстом). Формат строки этапа:\n' +
@@ -457,7 +461,9 @@ export const PLAN_RULES =
   '- [Фаза] — группа этапов: Каркас, Бэкенд, Фронтенд, Данные, Docker, Тесты, Проверка… (иерархия задачи).\n' +
   '- «после: N, M» — номера этапов, результат которых нужен этому (их итоги он получит). Без «после:» этап ждёт все предыдущие. ' +
   'Независимые этапы (разные файлы, не нужны результаты друг друга) указывай с «после:» только на общие основы — тогда они могут идти параллельно.\n' +
-  '- «проверка:» — команда, которая докажет, что этап сделан (npx tsc --noEmit, npm test -- books, php artisan route:list, docker compose config…). Без неё, если проверить нечем.\n' +
+  '- «проверка:» — ОДНА команда, которая падает (ненулевой код), если этап не сделан: npx tsc --noEmit, npm test -- books, npm run build, ' +
+  'php artisan route:list, docker compose config, curl.exe -f http://127.0.0.1:3000/api/books. Не cat/ls/test -f/grep и не описания словами. ' +
+  'Если проверить нечем (README, вёрстка) — без «проверка:».\n' +
   `- ЭТАП 1 всегда: «[Каркас] Записать ${BLUEPRINT}»: стек и версии, дерево папок, ТОЧНЫЕ имена файлов, модулей и классов, ` +
   'поля сущностей, маршруты API, переменные окружения, дизайн-токены. Все остальные этапы следуют этому каркасу.\n' +
   '- Затем этапы, которые ставят зависимости и конфиг (package.json / composer.json, npm install), — до кода, который их использует.';
@@ -497,8 +503,11 @@ export function startTaskPlan(deps: Deps, taskId: number, model: string | null =
           'Сейчас твоя единственная цель — составить план через plan_task. Не выполняй саму работу и не пиши файлы.',
         model,
         messageId: `plan-${taskId}`,
-        isStopped: () => run.stopped,
+        // planning only: the run ends the moment the plan exists (a model went on to build the whole project
+        // itself right after plan_task), and no file is written before that
+        isStopped: () => run.stopped || created > 0,
         isPaused: () => run.paused,
+        guardWrite: () => PLANNING_ONLY,
         title: `План задачи «${task.title}»`,
         onStopAll: () => { run.stopped = true; },
         onPlanTask: (_title, steps) => {

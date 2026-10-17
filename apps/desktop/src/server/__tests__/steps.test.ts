@@ -6,7 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import type { AddressInfo } from 'net';
 import { Db } from '../db';
-import { FileClaims, nextGroup, parseStep, afterOf, checkOf, dependencies, phaseOf, readyGroup, stepDetail } from '../steps';
+import { FileClaims, nextGroup, parseStep, afterOf, checkIssue, checkOf, dependencies, phaseOf, readyGroup, shellCheck, stepDetail } from '../steps';
 import { startTaskRun } from '../taskrunner';
 // these tests exercise the native tool-calling loop (guided mode has its own tests: guided.test.ts)
 process.env.OTTO_LOCAL_MODE = 'native';
@@ -133,4 +133,20 @@ test('steps start when the steps they need are done; independent ones run side b
   const odd = [st('todo', [9])];
   assert.equal(readyGroup(odd, 1).length, 1);
   assert.deepEqual(dependencies(seq), [[], [], [0, 1]]);
+});
+
+test('a planned check that is not a real command is skipped instead of blocking a finished step', () => {
+  assert.equal(checkIssue('npx tsc --noEmit'), null);
+  assert.equal(checkIssue('npm test && npm run test:e2e'), null);
+  assert.equal(checkIssue('docker compose config'), null);
+  assert.match(checkIssue('preview_page + run_in_page') ?? '', /Otto tool/);
+  assert.match(checkIssue('docker compose ps (all healthy), curl endpoints, сид + тесты') ?? '', /description/);
+  assert.match(checkIssue('cat README.md') ?? '', /proves nothing/);
+  if (process.platform === 'win32') {
+    assert.match(checkIssue('test -f .otto/blueprint.md') ?? '', /bash/);
+    assert.match(checkIssue('cat package.json | grep scripts') ?? '', /bash|proves nothing/);
+  }
+  assert.equal(shellCheck('npm test && npm run test:e2e', 'win32'), 'npm test; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npm run test:e2e');
+  assert.equal(shellCheck('curl -f http://localhost/api/books', 'win32'), 'curl.exe -f http://localhost/api/books');
+  assert.equal(shellCheck('npm test && npm run build', 'linux'), 'npm test && npm run build');
 });

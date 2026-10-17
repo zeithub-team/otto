@@ -37,6 +37,30 @@ export const checkDetail = (check: string): string => stepDetail({ check, after:
 export const checkOf = (detail: string | null | undefined): string => /^check: (.+)$/m.exec(detail ?? '')?.[1].trim() ?? '';
 export const afterOf = (detail: string | null | undefined): number[] =>
   (/^after: (.+)$/m.exec(detail ?? '')?.[1].match(/\d+/g) ?? []).map(Number);
+/**
+ * Why a planned check cannot prove anything here, or null when it is a real command. Planners write prose
+ * ("curl endpoints, сид + тесты"), tool names (preview_page) or bash that PowerShell has not (`test -f`, `grep`),
+ * and a check that cannot pass would block a finished step.
+ */
+export function checkIssue(command: string): string | null {
+  const c = command.trim();
+  if (!c) return 'empty';
+  if (/\b(preview_page|run_in_page|otto_preview|read_file|list_files)\b/.test(c)) return 'an Otto tool, not a command';
+  if (/[а-яё]{3,}/i.test(c.replace(/(["'])[^"']*\1/g, ''))) return 'a description, not a command';
+  if (/\((?:all|или|or)\b|\betc\b|\.\.\.|…/i.test(c)) return 'a description, not a command';
+  if (process.platform === 'win32' && /(^|[;&|]\s*)(test\s+-[a-z]|grep\b|head\b|tail\b|wc\b|which\b|true\b)|2>\/dev\/null|\|\|/.test(c)) return 'bash, not PowerShell';
+  // "cat README.md" / "ls x" only show a file: they pass whether the step was done or not
+  if (/^(cat|type|ls|dir|echo)\b/i.test(c)) return 'only shows a file, proves nothing';
+  return null;
+}
+
+/** A check as Windows PowerShell 5.1 runs it: `a && b` stops at the first failure, `curl` is the real curl.exe. */
+export function shellCheck(command: string, platform = process.platform): string {
+  if (platform !== 'win32') return command;
+  const parts = command.split(/\s*&&\s*/).map((p) => p.replace(/(^|[\s;|])curl(?=\s)/g, '$1curl.exe'));
+  return parts.length === 1 ? parts[0] : parts.join('; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ');
+}
+
 /** "[Бэкенд] Сервис книг" → "Бэкенд". */
 export const phaseOf = (title: string): string => /^\s*\[([^\]]{1,40})\]/.exec(title)?.[1].trim() ?? '';
 
