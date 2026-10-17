@@ -7,7 +7,7 @@ import { dangerReason, describeResult, listBackground, normalizeMode, requestApp
 
 test('commands that can wreck the machine are recognised; ordinary dev commands are not', () => {
   for (const bad of [
-    'format C:', 'diskpart', 'rm -rf /', 'rm -rf ~', 'sudo rm -fr / --no-preserve-root',
+    'format C:', 'format.com D: /q', 'cd x; format E:', 'diskpart', 'rm -rf /', 'rm -rf ~', 'sudo rm -fr / --no-preserve-root',
     'Remove-Item -Recurse -Force C:\\', 'Remove-Item C:\\ -Recurse', 'rd /s /q C:\\', 'shutdown /s /t 0', 'Stop-Computer',
     'reg delete HKLM\\Software\\X /f', 'Set-ExecutionPolicy Unrestricted', 'vssadmin delete shadows /all',
   ]) assert.ok(dangerReason(bad), `should refuse: ${bad}`);
@@ -15,6 +15,9 @@ test('commands that can wreck the machine are recognised; ordinary dev commands 
     'docker compose -f otto.compose.yaml up -d', 'docker exec pg psql -U postgres -c "create database shop"',
     'npm run dev', 'rm -rf node_modules', 'Remove-Item -Recurse -Force .\\dist', 'git status', 'php artisan migrate',
     'docker run -d --name pg2 -e POSTGRES_PASSWORD=secret -p 5433:5432 postgres:16',
+    'docker ps -a --filter "name=stranica" --format "{{.Names}} | {{.Status}}"',
+    'docker images --format "{{.Repository}}:{{.Tag}}" | Select-String "stranica"',
+    'Get-Process | Format-Table Name', 'npx prettier --write . ; npm run format',
   ]) assert.equal(dangerReason(ok), null, `should allow: ${ok}`);
 });
 

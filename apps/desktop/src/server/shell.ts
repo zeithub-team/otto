@@ -21,7 +21,8 @@ const APPROVAL_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** Commands that are refused in every mode: wiping disks, the system, the user's home, the machine itself. */
 const DANGER: Array<[RegExp, string]> = [
-  [/\b(format(\.com)?|diskpart|mkfs(\.\w+)?|fdisk|bcdedit|cipher\s+\/w)\b/i, 'disk formatting / partitioning'],
+  // the commands, not the words: `docker ps --format`, `Format-Table`, `prettier --format` are harmless
+  [/(?<![-\w.])(format(\.com)?(?=\s+[a-z]:)|diskpart|mkfs(\.\w+)?|fdisk|bcdedit|cipher\s+\/w)\b/i, 'disk formatting / partitioning'],
   [/\brm\s+(-\w*\s+)*-\w*[rR]\w*\s+(-\w+\s+)*(\/|~|\$HOME|\/\*|[A-Za-z]:[\\/]?)(\s|$)/, 'recursive delete of a root or home folder'],
   // the flag may come before or after the path
   [/\bremove-item\b(?=[^|;]*-recurse)[^|;]*\s(["']?)([A-Za-z]:[\\/]?|~|\$env:(userprofile|systemroot|windir)|\$home)\1(\s|$)/i, 'recursive delete of a drive or home folder'],
