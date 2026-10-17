@@ -134,7 +134,11 @@ async function handleFrame(ws: WebSocket, raw: string, deps: ServerDeps): Promis
   }
 
   const toolEvents: { name: string; args: unknown; result: string }[] = [];
+  // closing the socket is the stop button: end the model request and any running command right away
+  const stop = new AbortController();
+  ws.once('close', () => stop.abort());
   const stream = generateResponse({
+    signal: stop.signal,
     prompt,
     messageId,
     projectId,

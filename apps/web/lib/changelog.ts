@@ -10,6 +10,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.0',
+    date: '2026-10-17',
+    items: [
+      'Agent: each local model gets its own settings — tool mode (native or guided), context size, answer length and temperature are picked by model family and size instead of one set for all',
+      'Agent: critical project files (.env, package.json, composer.json, Dockerfile, lock files…) can no longer be deleted by the agent; they can still be edited',
+      'Agent: Stop really stops — the model request is closed (the GPU is freed at once) and a running command is killed with everything it started',
+      'Agent: a command that hits its time limit on Windows no longer leaves npm/php/artisan running in the background',
+      'Agent: "done" is not accepted while the last test/build/migrate still fails — the model is shown the failure and has to fix it or say honestly that it still fails',
+      'Agent: in long runs the shrunk context keeps the task, the files already changed and the failing check, so the model does not lose track after compaction',
+    ],
+  },
+  {
     version: '0.1.11',
     date: '2026-10-15',
     items: [

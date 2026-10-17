@@ -20,7 +20,7 @@ import { applyBaseStyle, CLASSLESS_CSS, designGaps, wantsSite } from './designki
 import { makePlan, planText, wantsPlan } from './planner';
 import { buildSite, ollamaChat, wantsMultiPageSite } from './sitebuilder';
 import { ChangeTracker, deltaTag, lineDelta, stripChangesMarker, ThinkSplitter } from './changes';
-import { compactMessages, readLimitChars } from './context';
+import { commandExitCode, compactMessages, readLimitChars, taskStateNote } from './context';
 import { EditSession, isFailure, LoopGuard, toolKind } from './runguard';
 import { Checkpoint } from './checkpoints';
 import { modelProfile, recommendedContext, recommendedTemperature, shouldUseGuided } from './modelcaps';
@@ -266,6 +266,8 @@ export interface GenerateResponseOptions {
   guardWrite?: (tool: string, path: string) => string | null;
   /** A person is watching (the chat): `run_command` may ask them; otherwise only auto mode runs commands. */
   interactive?: boolean;
+  /** Aborted when the user stops the run: the model request and a running command end at once. */
+  signal?: AbortSignal;
 }
 
 /** Raised for transport problems (mirrors `httpx.HTTPError`). */
@@ -758,31 +760,36 @@ async function* readLines(response: Response): AsyncGenerator<string> {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
-  for (;;) {
-    let done: boolean;
-    let value: Uint8Array | undefined;
-    try {
-      ({ done, value } = await reader.read());
-    } catch (exc) {
-      throw new OllamaConnectionError(errorMessage(exc));
+  try {
+    for (;;) {
+      let done: boolean;
+      let value: Uint8Array | undefined;
+      try {
+        ({ done, value } = await reader.read());
+      } catch (exc) {
+        throw new OllamaConnectionError(errorMessage(exc));
+      }
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let index = buffer.indexOf('\n');
+      while (index >= 0) {
+        let line = buffer.slice(0, index);
+        buffer = buffer.slice(index + 1);
+        if (line.endsWith('\r')) line = line.slice(0, -1);
+        yield line;
+        index = buffer.indexOf('\n');
+      }
     }
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let index = buffer.indexOf('\n');
-    while (index >= 0) {
-      let line = buffer.slice(0, index);
-      buffer = buffer.slice(index + 1);
-      if (line.endsWith('\r')) line = line.slice(0, -1);
-      yield line;
-      index = buffer.indexOf('\n');
-    }
+    buffer += decoder.decode();
+    if (buffer.length) yield buffer;
+  } finally {
+    // a reader left early (break, stop) must close the stream, or the server keeps generating
+    reader.cancel().catch(() => {});
   }
-  buffer += decoder.decode();
-  if (buffer.length) yield buffer;
 }
 
 /** POST /api/chat — one step of the tool loop. */
-async function postChat(payload: unknown): Promise<Response> {
+async function postChat(payload: unknown, signal?: AbortSignal): Promise<Response> {
   const model = (payload as { model?: unknown } | null)?.model;
   if (typeof model === 'string' && providerForModel(model)) {
     try {
@@ -806,6 +813,7 @@ async function postChat(payload: unknown): Promise<Response> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       dispatcher: patientAgent,
+      signal,
     })) as unknown as Response;
   } catch (exc) {
     throw new OllamaConnectionError(errorMessage(exc));
@@ -1596,6 +1604,10 @@ ${webRules}Порядок работы:
   let actionNudges = 0;
   // an empty final answer after real work: the model is asked once for its summary
   let emptyNudges = 0;
+  // a check (tests, build, migrate) that failed and has not passed since: "done" is not accepted over it
+  let failing: { command: string; output: string } | null = null;
+  let verifyNudges = 0;
+  let stateNote: Message | null = null;
   // files the request names that were never written: the model is sent back once
   let missingNudges = 0;
   // a page made by a local model is checked for a finished look; up to two polish rounds
@@ -1684,11 +1696,20 @@ ${webRules}Порядок работы:
     // the standing reminder after a tool step: one copy, replaced every step (copies used to pile up)
     let reminder: Message | null = null;
     for (let step = 0; step < stepLimit; step++) {
+      if (options.signal?.aborted) return;
       const ctxTokens = providerForModel(activeModel) ? 65536 : typeof sampling.num_ctx === 'number' ? sampling.num_ctx : 8192;
       setReadLimit(readLimitChars(ctxTokens));
       const compacted = compactMessages(messages, ctxTokens);
       // old results were cut out of the context: reading them again is not a loop any more
-      if (compacted) loop.forgetResults();
+      if (compacted) {
+        loop.forgetResults();
+        if (stateNote) {
+          const at = messages.indexOf(stateNote);
+          if (at >= 0) messages.splice(at, 1);
+        }
+        stateNote = { role: 'user', content: taskStateNote(options.prompt, changes.list(), failing) };
+        messages.push(stateNote);
+      }
       const payload: Record<string, unknown> = {
         model: activeModel,
         messages: guided ? toGuidedMessages(messages) : messages,
@@ -1709,7 +1730,7 @@ ${webRules}Порядок работы:
         );
       }
 
-      const response = await postChat(payload);
+      const response = await postChat(payload, options.signal);
       if (response.status !== 200) {
         const detail = await response.text();
         // Model doesn't support the native tools API → retry without it.
@@ -1955,6 +1976,16 @@ ${webRules}Порядок работы:
             });
             continue;
           }
+          // the model says it is done while the last check still fails: show it the failure once more
+          if (finalText && failing && verifyNudges < 1 && step < stepLimit - 1) {
+            verifyNudges++;
+            messages.push({ role: 'assistant', content: contentParts.join('') });
+            messages.push({
+              role: 'user',
+              content: `Not verified: \`${failing.command}\` failed and has not passed since:\n${failing.output.slice(-1500)}\nFix the cause and run it again. If it cannot be fixed, say honestly in the answer that it still fails and why.`,
+            });
+            continue;
+          }
           if (!finalText && toolCallsTotal > 0) {
             // still nothing: report the run itself rather than an error card
             const card = changesCard();
@@ -2091,8 +2122,11 @@ ${webRules}Порядок работы:
               if (argsObj.background === true || argsObj.background === 'true') {
                 result = await startBackground(root, command);
               } else {
-                const run = await runCommand(root, command, Number(argsObj.timeout_seconds) || undefined);
+                const run = await runCommand(root, command, Number(argsObj.timeout_seconds) || undefined, options.signal);
                 result = describeResult(command, run);
+                const code = commandExitCode(result);
+                if (code !== null && code !== 0) failing = { command, output: run.output };
+                else if (code === 0 && failing && (failing.command === command || /\b(test|build|migrate|artisan|tsc|lint|check)\b/i.test(command))) failing = null;
               }
               // a dev server the user wants to see: show it in the Preview tab
               const devUrl = options.onUi ? localServerUrl(result) : null;
@@ -2215,6 +2249,7 @@ ${webRules}Порядок работы:
     if (thinking) yield thinkingChunk(thinking, thinkId, ts, pid, false);
     yield assistantChunk(fallback, msgId, ts, pid, false, toolsEnabled, changesCard());
   } catch (exc) {
+    if (options.signal?.aborted) return;
     if (exc instanceof OllamaConnectionError) {
       yield err(`Ошибка соединения с ${providerForModel(activeModel)?.name ?? 'Ollama'}: ${exc.message}`);
       return;

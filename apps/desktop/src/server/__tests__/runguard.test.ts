@@ -10,7 +10,8 @@ import { Checkpoint, hasCheckpoint, restoreCheckpoint } from '../checkpoints';
 import { ChangeTracker } from '../changes';
 import { isProtectedFile } from '../workspacetools';
 import { modelProfile, shouldUseGuided, recommendedContext, recommendedTemperature } from '../modelcaps';
-import { compactMessages, ChatMessage } from '../context';
+import { commandExitCode, compactMessages, ChatMessage, taskStateNote } from '../context';
+import { describeResult, runCommand } from '../shell';
 
 const tmpProject = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'otto-guard-'));
 const read = (root: string, rel: string): string => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -291,6 +292,31 @@ test('compaction preserves first line and errors from tool results', () => {
   assert.match(msgs[1].content, /File overwritten: src\/app\.ts/);
   assert.match(msgs[2].content, /REJECTED/);
   assert.match(msgs[2].content, /cannot delete protected file/);
+});
+
+test('stopping a run kills the running command and says so', async () => {
+  const stop = new AbortController();
+  const cmd = process.platform === 'win32' ? 'Start-Sleep -Seconds 30' : 'sleep 30';
+  const started = Date.now();
+  const pending = runCommand(tmpProject(), cmd, 60, stop.signal);
+  setTimeout(() => stop.abort(), 1500);
+  const r = await pending;
+  assert.equal(r.cancelled, true);
+  assert.ok(Date.now() - started < 15_000, 'the command must end soon after the stop');
+  assert.match(describeResult(cmd, r), /cancelled by the user/);
+  assert.equal(commandExitCode(describeResult(cmd, r)), null);
+});
+
+test('exit codes and the task state note come from tool results', () => {
+  assert.equal(commandExitCode('$ php artisan test\n(exit code 1, 4.2 s)\nFAIL'), 1);
+  assert.equal(commandExitCode('$ npm test\n(exit code 0, 1 s)\nok'), 0);
+  assert.equal(commandExitCode('$ x\n(stopped: time limit reached, 120 s)\n'), null);
+  const note = taskStateNote('Сделай каталог книг', [{ path: 'app/Models/Book.php', action: 'created' }], { command: 'php artisan test', output: 'FAILED BookTest' });
+  assert.match(note, /каталог книг/);
+  assert.match(note, /app\/Models\/Book\.php \(created\)/);
+  assert.match(note, /php artisan test/);
+  assert.match(note, /FAILED BookTest/);
+  assert.match(taskStateNote('t', [], null), /Файлы ещё не менялись/);
 });
 
 test('recommended context and temperature vary by model', () => {

@@ -1,6 +1,6 @@
 {
   "name": "@otto/desktop",
-  "version": "0.1.11",
+  "version": "0.2.0",
   "private": true,
   "description": "zeithub.otto — Electron shell and embedded local server",
   "author": "zeithub.team",

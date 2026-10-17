@@ -48,6 +48,29 @@ export const readLimitChars = (ctxTokens: number): number => Math.max(6000, Math
 
 const STUB_AFTER = 700;
 
+/** Exit code of a run_command result ("(exit code 1, 2.3 s)"); null when it did not finish normally. */
+export function commandExitCode(result: string): number | null {
+  const m = /^\(exit code (-?\d+)/m.exec(result);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * The run's state as Otto knows it from the tools (not from what the model says): the task, the files
+ * really changed and a command that is still failing. Re-sent after old results were compacted away.
+ */
+export function taskStateNote(
+  prompt: string,
+  changed: Array<{ path: string; action: string }>,
+  failing: { command: string; output: string } | null,
+): string {
+  const lines = [`[Состояние задачи — от Otto, по результатам инструментов]`, `Задача: ${prompt.trim().slice(0, 600)}`];
+  if (changed.length) lines.push(`Уже изменено (${changed.length}): ${changed.slice(0, 40).map((c) => `${c.path} (${c.action})`).join(', ')}`);
+  else lines.push('Файлы ещё не менялись.');
+  if (failing) lines.push(`Последняя проверка НЕ прошла: \`${failing.command}\`\n${failing.output.slice(-800)}`);
+  lines.push('Старые результаты сокращены: прежде чем править файл, прочитай его заново.');
+  return lines.join('\n');
+}
+
 /** Extract the key information from a tool result before stubbing it: file path, status, errors. */
 function toolResultStub(content: string, toolName: string | undefined): string {
   const tool = toolName ?? 'инструмент';

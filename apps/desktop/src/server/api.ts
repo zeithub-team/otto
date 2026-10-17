@@ -984,7 +984,7 @@ export async function handleApi(
     }
     if (pathname === '/api/models/caps') {
       if (method !== 'GET') return false;
-      const model = q.get('model') ?? '';
+      const model = queryString(params, 'model', '');
       if (!model) { sendJson(res, 400, { error: 'model required' }); return true; }
       const profile = modelProfile(model);
       const guided = shouldUseGuided(model, 'auto');
