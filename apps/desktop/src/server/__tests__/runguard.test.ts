@@ -8,7 +8,7 @@ import { syntaxProblems, vetWrite } from '../codecheck';
 import { EditSession, isFailure, LoopGuard, madeProgress, STEP_HARD_CAP, stepBudget } from '../runguard';
 import { Checkpoint, hasCheckpoint, restoreCheckpoint } from '../checkpoints';
 import { ChangeTracker } from '../changes';
-import { isProtectedFile } from '../workspacetools';
+import { decodeTextFile, isProtectedFile } from '../workspacetools';
 import { modelProfile, shouldUseGuided, recommendedContext, recommendedTemperature } from '../modelcaps';
 import { commandExitCode, compactMessages, ChatMessage, sameCheck, taskStateNote } from '../context';
 import { onlyCommands, pastedCode } from '../ollama';
@@ -352,6 +352,15 @@ test('a run that keeps changing files is not cut off at the step limit, an idle 
   // never beyond the hard cap
   assert.equal(stepBudget(279, 280, 40, 278), STEP_HARD_CAP);
   assert.equal(stepBudget(STEP_HARD_CAP - 1, STEP_HARD_CAP, 40, STEP_HARD_CAP - 2), STEP_HARD_CAP);
+});
+
+test('read_file reads a UTF-16 log written by PowerShell, still refuses binary', () => {
+  const root = tmpProject();
+  const text = 'src/app.module.ts(5,31): error TS2307: Не найден модуль';
+  fs.writeFileSync(path.join(root, 'errors.log'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]));
+  assert.match(runTool(root, 'read_file', { path: 'errors.log' }), /TS2307: Не найден модуль/);
+  assert.equal(decodeTextFile(Buffer.from('привет', 'utf8')), 'привет');
+  assert.throws(() => decodeTextFile(Buffer.from([0xc3, 0x28, 0x00, 0x9f])));
 });
 
 test('a failed check is cleared only by the same kind of check passing', () => {

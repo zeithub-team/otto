@@ -49,6 +49,16 @@ const TOOL_SKIP_DIRS = new Set(['.git', '.next', 'node_modules', '.venv', '.otto
  * almost always a model mistake. Returns a human-readable reason, or null if the file
  * is not protected. Only the basename is checked: the protection applies at any depth.
  */
+/**
+ * Text of a file: UTF-8 (strict, a binary file still throws), or UTF-16 with a BOM — what PowerShell's `>` and
+ * Out-File write on Windows, so a log the agent saved with a command is readable.
+ */
+export function decodeTextFile(buf: Buffer): string {
+  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) return new TextDecoder('utf-16le').decode(buf.subarray(2));
+  if (buf.length >= 2 && buf[0] === 0xfe && buf[1] === 0xff) return new TextDecoder('utf-16be').decode(buf.subarray(2));
+  return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+}
+
 export function isProtectedFile(rel: string): string | null {
   const base = rel.replace(/\\/g, '/').split('/').pop()!.toLowerCase();
   const CRITICAL: Record<string, string> = {
@@ -266,8 +276,7 @@ export function runTool(
     if (fs.statSync(target).size > MAX_FILE_SIZE) {
       return 'File exceeds 1 MB and was not read';
     }
-    // strict UTF-8 decoding — Python's read_text() raises on invalid bytes
-    const text = new TextDecoder('utf-8', { fatal: true }).decode(fs.readFileSync(target));
+    const text = decodeTextFile(fs.readFileSync(target));
     session?.noteRead(relativePosix(root, target));
     return sliceFile(text, readLimit, Number(params.start_line) || undefined, Number(params.end_line) || undefined);
   }
