@@ -64,6 +64,11 @@ const VISION_NAME_RE = /(llava|vision|minicpm-?v|bakllava|moondream|qwen.*vl|[-.
 
 /** Does the model advertise the "vision" capability? (name regex as fallback). */
 async function modelSupportsVision(model: string): Promise<boolean> {
+  return modelHas(model, 'vision', VISION_NAME_RE);
+}
+
+/** Does the model advertise an Ollama capability ("vision", "tools")? `fallback` decides when Ollama cannot tell. */
+async function modelHas(model: string, capability: string, fallback: RegExp | null): Promise<boolean> {
   if (!model) return false;
   const ask = async (body: Record<string, string>): Promise<boolean | null> => {
     try {
@@ -74,13 +79,13 @@ async function modelSupportsVision(model: string): Promise<boolean> {
       });
       if (!res.ok) return null;
       const data = (await res.json()) as { capabilities?: string[] };
-      return Array.isArray(data.capabilities) && data.capabilities.includes('vision');
+      return Array.isArray(data.capabilities) ? data.capabilities.includes(capability) : null;
     } catch {
       return null;
     }
   };
   const caps = (await ask({ model })) ?? (await ask({ name: model }));
-  return caps === null ? VISION_NAME_RE.test(model) : caps;
+  return caps === null ? Boolean(fallback?.test(model)) : caps;
 }
 
 /**
@@ -1425,7 +1430,9 @@ export async function* generateResponse(
         yield err('Vision-модель не вернула описание изображения. Попробуйте другую vision-модель или отправьте снова.');
         return;
       }
-      activeModel = options.model && options.model !== vm ? options.model : baseModel();
+      // the chosen model builds it — also when it read the picture itself, as long as it can call tools
+      // (Tiel, Qwen3.6, Gemma 4); a pure vision model (llava) hands over to the default one
+      activeModel = options.model && (options.model !== vm || (await modelHas(vm, 'tools', null))) ? options.model : baseModel();
       userMsg.content =
         `${prompt}\n\n---\nОписание приложенного изображения (составлено vision-моделью; оно и есть образец — ` +
         `не выдумывай деталей сверх него):\n${spec}\n---\n` +

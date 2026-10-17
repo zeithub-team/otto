@@ -20,7 +20,7 @@ interface ChatBody {
   messages: Array<{ role: string; content: string; images?: string[] }>;
 }
 
-async function fakeOllama(opts: { visionSpec?: string; agentTurns: Array<Record<string, unknown>>; installed?: string[] }) {
+async function fakeOllama(opts: { visionSpec?: string; agentTurns: Array<Record<string, unknown>>; installed?: string[]; caps?: Record<string, string[]> }) {
   const chatRequests: ChatBody[] = [];
   let agentIdx = 0;
   const server = http.createServer((req, res) => {
@@ -31,6 +31,15 @@ async function fakeOllama(opts: { visionSpec?: string; agentTurns: Array<Record<
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ models: (opts.installed ?? []).map((name) => ({ name })) }));
         return;
+      }
+      if (req.url === '/api/show' && opts.caps) {
+        const { model, name } = JSON.parse(raw) as { model?: string; name?: string };
+        const caps = opts.caps[String(model ?? name)];
+        if (caps) {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ capabilities: caps }));
+          return;
+        }
       }
       if (req.url !== '/api/chat') {
         res.writeHead(404).end();
@@ -102,6 +111,31 @@ test('screenshot → the vision model writes a spec, the tool model builds conce
     assert.match(String(chunks[chunks.length - 1].content), /concept\.html/);
   } finally {
     await ollama.close();
+  }
+});
+
+test('a chosen model that sees pictures and calls tools reads the concept and builds it itself', async () => {
+  const root = project();
+  const model = 'hf.co/x/Tiel-Coder-35B-A3B-GGUF:Q4';
+  const ollama = await fakeOllama({
+    visionSpec: 'Кофейня, кнопка «Оформить заказ»',
+    installed: [model],
+    caps: { [model]: ['completion', 'tools', 'vision'] },
+    agentTurns: [
+      { tool_calls: [call('write_file', { path: 'index.html', content: '<!doctype html><button>Оформить заказ</button>' })] },
+      { content: 'ИТОГ: index.html' },
+    ],
+  });
+  try {
+    await run({ prompt: 'собери по концепту', messageId: 'm', projectId: 1, projectPath: project(), images: ['aGVsbG8='], model, useTools: true });
+    const [visionReq, agentReq] = ollama.chatRequests;
+    assert.equal(visionReq.model, model);
+    // not the default model (it may not be installed at all)
+    assert.equal(agentReq.model, model);
+    assert.ok(!agentReq.messages.some((m) => m.images?.length));
+  } finally {
+    await ollama.close();
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
