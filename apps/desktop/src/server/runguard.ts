@@ -158,6 +158,8 @@ export class LoopGuard {
   private reverts = 0;
   /** Reads in a row with no change and no command: a model exploring instead of working. */
   private readStreak = 0;
+  private readBudget = 0;
+  private budgetRefusals = 0;
   private readNudged = 0;
   private stop: string | null = null;
 
@@ -175,7 +177,20 @@ export class LoopGuard {
   }
 
   /** A refusal to give the model INSTEAD of running the call, or null to run it. */
+  /**
+   * A plan step may read this many results in a row without a change; after that reads are refused until it
+   * writes something (a step that reads 50 files and writes none never finishes). Off (0) for chat runs.
+   */
+  setReadBudget(n: number): void {
+    this.readBudget = n;
+  }
+
   before(name: string, args: unknown): string | null {
+    if (this.readBudget > 0 && toolKind(name) === 'read' && this.readStreak >= this.readBudget) {
+      if (++this.budgetRefusals >= 5) this.stop ??= `${this.readStreak} reads without a change, and it kept reading after being told to write`;
+      return `REJECTED: read budget used up — you have read ${this.readStreak} files/results in a row without changing anything, and this step needs a change. ` +
+        'Nothing more is read now. Write the first file of this step NOW with write_file (or fix one with replace_in_file) from what you already know; you can read again after that.';
+    }
     const prev = this.past.get(`${name}:${stable(args)}`);
     let refusal: string | null = null;
     if (prev) {
@@ -218,6 +233,7 @@ export class LoopGuard {
     this.calls++;
     this.refusals = 0;
     this.readStreak = kind === 'read' ? this.readStreak + 1 : 0;
+    if (kind !== 'read') this.budgetRefusals = 0;
     let progress: boolean;
     if (kind === 'write') {
       progress = !failed && !/^No change/.test(result);

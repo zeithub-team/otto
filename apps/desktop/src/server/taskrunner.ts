@@ -114,6 +114,7 @@ async function drive(
     /** A plan step: skills are chosen for the step (focus) within the task's stack (goal). */
     skillGoal?: string;
     skillFocus?: string;
+    readBudget?: number;
   },
 ): Promise<DriveResult> {
   const result: DriveResult = { text: '', error: null, changed: [], ran: false };
@@ -134,6 +135,7 @@ async function drive(
     guardWrite: opts.guardWrite,
     skillGoal: opts.skillGoal,
     skillFocus: opts.skillFocus,
+    readBudget: opts.readBudget,
     onCreateTask: (title, detail) => {
       try {
         deps.db.createTask(opts.projectId, title, detail, 'agent');
@@ -244,6 +246,9 @@ export function stepPrompt(
   ];
   return parts.filter(Boolean).join('\n\n');
 }
+
+/** Reads in a row a plan step may make without a change before reads are refused (see LoopGuard.setReadBudget). */
+export const STEP_READ_BUDGET = 25;
 
 /** The step's summary says it is not done ("Итог этапа 20 (не завершен)", "not finished", "осталось сделать…"). */
 export function saysUnfinished(text: string): boolean {
@@ -356,6 +361,7 @@ export function startTaskRun(deps: Deps, taskId: number, model: string | null = 
               prompt: prompt + extra,
               skillGoal: `${goal.title}\n${goal.detail ?? ''}\n${blueprint.slice(0, 600)}`,
               skillFocus: `${step.title}\n${check}`,
+              readBudget: STEP_READ_BUDGET,
               extraSystem: partners.length ? `${STEP_RULES}\n\n${PARALLEL_RULES}` : STEP_RULES,
               model,
               messageId: `task-${taskId}-${step.id}-${n}`,

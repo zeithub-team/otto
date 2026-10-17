@@ -394,6 +394,29 @@ test('an empty controller or service is reported as a stub, a real one and a Nes
   assert.match(runTool(root, 'write_file', { path: 'src/cart/cart.controller.ts', content: 'export class CartController {}\n' }), /NOTE: src\/cart\/cart\.controller\.ts is only a stub/);
 });
 
+test('a plan step that only reads hits its read budget: reads are refused until it writes', () => {
+  const guard = new LoopGuard(tmpProject());
+  guard.setReadBudget(25);
+  for (let i = 0; i < 25; i++) {
+    assert.equal(guard.before('read_file', { path: `f${i}.ts` }), null);
+    guard.after('read_file', { path: `f${i}.ts` }, `c${i}`);
+  }
+  assert.match(guard.before('read_file', { path: 'more.ts' }) ?? '', /^REJECTED: read budget used up/);
+  assert.equal(guard.before('write_file', { path: 'a.ts', content: 'x' }), null, 'writing is always allowed');
+  guard.after('write_file', { path: 'a.ts', content: 'x' }, 'File CREATED (новый файл): a.ts');
+  assert.equal(guard.before('read_file', { path: 'more.ts' }), null, 'after a change reads are open again');
+  // a model that keeps reading after being told: stopped
+  const stubborn = new LoopGuard(tmpProject());
+  stubborn.setReadBudget(3);
+  for (let i = 0; i < 3; i++) stubborn.after('read_file', { path: `g${i}.ts` }, `c${i}`);
+  for (let i = 0; i < 5; i++) stubborn.before('read_file', { path: `h${i}.ts` });
+  assert.match(stubborn.stopReason ?? '', /kept reading after being told to write/);
+  // chat runs have no budget
+  const chat = new LoopGuard(tmpProject());
+  for (let i = 0; i < 30; i++) chat.after('read_file', { path: `q${i}.ts` }, `c${i}`);
+  assert.equal(chat.before('read_file', { path: 'z.ts' }), null);
+});
+
 test('a model that only reads is pushed four times, then stopped', () => {
   const guard = new LoopGuard(tmpProject());
   let pushes = 0;

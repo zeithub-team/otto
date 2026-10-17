@@ -279,6 +279,8 @@ export interface GenerateResponseOptions {
   /** Plan steps: the whole task (it names the stack) and the step itself — skills are picked for the step. */
   skillGoal?: string;
   skillFocus?: string;
+  /** Reads in a row without a change after which further reads are refused (plan steps; 0 = no limit). */
+  readBudget?: number;
 }
 
 /** Raised for transport problems (mirrors `httpx.HTTPError`). */
@@ -1087,6 +1089,7 @@ export async function* generateResponse(
   const checkpoint = new Checkpoint(root, options.messageId);
   const edits = new EditSession();
   const loop = new LoopGuard(root);
+  if (options.readBudget) loop.setReadBudget(options.readBudget);
   /** The changes card of the final answer; it can undo the run while the checkpoint is there. */
   const changesCard = (): string => {
     try {
