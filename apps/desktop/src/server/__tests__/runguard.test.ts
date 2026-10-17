@@ -8,7 +8,8 @@ import { syntaxProblems, vetWrite } from '../codecheck';
 import { EditSession, isFailure, LoopGuard, madeProgress, STEP_HARD_CAP, stepBudget } from '../runguard';
 import { Checkpoint, hasCheckpoint, restoreCheckpoint } from '../checkpoints';
 import { ChangeTracker } from '../changes';
-import { decodeTextFile, isProtectedFile } from '../workspacetools';
+import { decodeTextFile, isProtectedFile, stubNote } from '../workspacetools';
+import { configureSkills, enabledSkills, pickSkills } from '../skills';
 import { modelProfile, shouldUseGuided, recommendedContext, recommendedTemperature } from '../modelcaps';
 import { commandExitCode, compactMessages, ChatMessage, sameCheck, taskStateNote } from '../context';
 import { onlyCommands, pastedCode } from '../ollama';
@@ -361,6 +362,58 @@ test('read_file reads a UTF-16 log written by PowerShell, still refuses binary',
   assert.match(runTool(root, 'read_file', { path: 'errors.log' }), /TS2307: Не найден модуль/);
   assert.equal(decodeTextFile(Buffer.from('привет', 'utf8')), 'привет');
   assert.throws(() => decodeTextFile(Buffer.from([0xc3, 0x28, 0x00, 0x9f])));
+});
+
+test('a file under a folder named like the project is refused: the model is already in the root', () => {
+  const root = path.join(tmpProject(), 'stranica');
+  fs.mkdirSync(root);
+  const r = runTool(root, 'write_file', { path: 'stranica/src/main.ts', content: 'export const a = 1;\n' });
+  assert.match(r, /^REJECTED: you are already inside the project folder "stranica"/);
+  assert.match(r, /"src\/main\.ts"/);
+  assert.equal(fs.existsSync(path.join(root, 'stranica')), false);
+  // a real subfolder with that name, or the right path, are fine
+  assert.match(runTool(root, 'write_file', { path: 'src/main.ts', content: 'export const a = 1;\n' }), /^File CREATED/);
+  fs.mkdirSync(path.join(root, 'stranica'));
+  assert.match(runTool(root, 'write_file', { path: 'stranica/x.ts', content: 'export const b = 2;\n' }), /^File CREATED/);
+});
+
+test('an empty controller or service is reported as a stub, a real one and a NestJS module are not', () => {
+  assert.match(stubNote('src/cart/cart.controller.ts', "import { Controller } from '@nestjs/common';\n@Controller('cart')\nexport class CartController {}\n"), /only a stub \(an empty class\)/);
+  assert.match(stubNote('app/Http/Controllers/BookController.php', '<?php\nclass BookController extends Controller\n{\n    // TODO\n}\n'), /stub/);
+  assert.equal(stubNote('src/books/books.module.ts', "@Module({ imports: [TypeOrmModule.forFeature([Book])], providers: [BooksService] })\nexport class BooksModule {}\n"), '');
+  const real = "@Injectable()\nexport class BooksService {\n  constructor(@InjectRepository(Book) private readonly books: Repository<Book>) {}\n  findAll() {\n    return this.books.find();\n  }\n  findOne(id: number) {\n    return this.books.findOne({ where: { id } });\n  }\n}\n";
+  assert.equal(stubNote('src/books/books.service.ts', real), '');
+  assert.equal(stubNote('src/books/dto/create-book.dto.ts', 'export class CreateBookDto {}'), '');
+  // the note reaches the model in the write result
+  const root = tmpProject();
+  assert.match(runTool(root, 'write_file', { path: 'src/cart/cart.controller.ts', content: 'export class CartController {}\n' }), /NOTE: src\/cart\/cart\.controller\.ts is only a stub/);
+});
+
+test('a model that only reads is pushed four times, then stopped', () => {
+  const guard = new LoopGuard(tmpProject());
+  let pushes = 0;
+  for (let i = 0; i < 80 && !guard.stopReason; i++) {
+    guard.after('read_file', { path: `f${i}.ts` }, `c${i}`);
+    if (guard.readNudge()) pushes++;
+  }
+  assert.equal(pushes, 4);
+  assert.match(guard.stopReason ?? '', /reads in a row without a single change/);
+});
+
+test('the frameworks a request names get their skills first', () => {
+  configureSkills({ getSetting: () => '' });
+  const on = enabledSkills(null);
+  const names = (p: string) => pickSkills(on, p).map((s) => s.name);
+  const nest = names('Собери на NestJS + PostgreSQL, TypeORM, Docker compose, тесты, сайт по концепту');
+  assert.deepEqual([...nest].sort(), ['docker-compose', 'nestjs', 'postgres']);
+  const lara = names('Создай проект на Laravel про книги, SQLite, миграции и сидеры, страницы на Blade');
+  assert.equal(lara[0], 'laravel');
+  assert.ok(!lara.includes('postgres'));
+  // no framework named: two general skills, no stack ones
+  const site = pickSkills(on, 'Сделай лендинг кофейни, адаптив под телефон');
+  assert.equal(site.length, 2);
+  assert.ok(site.every((s) => !s.stack));
+  assert.ok(site.some((s) => s.name === 'responsive-mobile'));
 });
 
 test('a failed check is cleared only by the same kind of check passing', () => {

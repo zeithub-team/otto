@@ -235,6 +235,11 @@ export class LoopGuard {
    */
   readNudge(): string | null {
     if (this.readStreak < 15 + this.readNudged * 10) return null;
+    // pushed four times and still only reading (a small window that forgets what it read): stop honestly
+    if (this.readNudged >= 4) {
+      this.stop ??= `${this.readStreak} reads in a row without a single change`;
+      return null;
+    }
     this.readNudged++;
     return `You have read ${this.readStreak} files/results in a row without changing anything. You have enough context: start the actual change now (replace_in_file / write_file / run_command). If the task is only a question, answer it.`;
   }

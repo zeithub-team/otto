@@ -59,6 +59,34 @@ export function decodeTextFile(buf: Buffer): string {
   return new TextDecoder('utf-8', { fatal: true }).decode(buf);
 }
 
+/**
+ * A new file under a folder named like the project itself ("stranica/src/main.ts" inside the stranica project)
+ * when there is no such folder: the model thinks it is one level up and would build a nested copy.
+ */
+export function nestedProjectPath(root: string, rel: string): string | null {
+  const first = rel.split('/')[0];
+  if (!first || !rel.includes('/') || first.toLowerCase() !== path.basename(root).toLowerCase()) return null;
+  if (fs.existsSync(path.join(root, first))) return null;
+  const inner = rel.slice(first.length + 1);
+  return `REJECTED: you are already inside the project folder "${first}" — "${rel}" would create a nested copy "${first}/${first}/…". Nothing was written. Use the path relative to the project root: "${inner}".`;
+}
+
+// not modules/models/requests: a NestJS module is an empty class under @Module, a Laravel model may be tiny
+const CODE_UNIT = /(controller|service|repository|resolver|gateway|strategy|handler|Controller|Service|Repository)\.(ts|js|php|py)$/;
+
+/**
+ * A controller/service/module that is only a skeleton: an empty class or a "TODO" body. Said in the result so
+ * the model writes the real code now instead of reporting the file as done.
+ */
+export function stubNote(rel: string, content: string): string {
+  if (!CODE_UNIT.test(rel)) return '';
+  const code = content.split('\n').map((l) => l.trim()).filter((l) => l && !/^(\/\/|#|\*|\/\*|import |use |namespace |<\?php|from |@|export \{|\}|\{)/.test(l));
+  const emptyClass = /class\s+\w+[^{]*\{\s*\}/.test(content);
+  const todo = /\b(TODO|FIXME|implement me|not implemented)\b/i.test(content);
+  if (code.length >= 4 && !emptyClass && !todo) return '';
+  return `\nNOTE: ${rel} is only a stub (${emptyClass ? 'an empty class' : todo ? 'TODO instead of code' : `${code.length} line(s) of code`}). Write the real implementation now — methods, injected dependencies, logic — do not report it as done.`;
+}
+
 export function isProtectedFile(rel: string): string | null {
   const base = rel.replace(/\\/g, '/').split('/').pop()!.toLowerCase();
   const CRITICAL: Record<string, string> = {
@@ -412,6 +440,8 @@ export function runTool(
     const target = safePath(root, relativePath);
     const rel = relativePosix(root, target);
     const existed = fs.existsSync(target);
+    const nested = !existed ? nestedProjectPath(root, rel) : null;
+    if (nested) return nested;
     const prevSize = existed ? fs.statSync(target).size : null;
     let before: string | null = null;
     if (existed && (prevSize ?? 0) <= MAX_FILE_SIZE) {
@@ -448,10 +478,11 @@ export function runTool(
     // Distinguish overwrite from creation: when the model believes it is
     // editing an existing file, "File CREATED" means it got the path wrong
     // (a hallucinated path otherwise silently spawns a bogus file).
+    const stub = stubNote(rel, content);
     if (existed) {
-      return `File overwritten: ${rel} (${strLen(content)} bytes, was ${prevSize} bytes)${warn}${writeWarnings(rel, before, content, parsed)}${deltaTag(delta.added, delta.removed)}`;
+      return `File overwritten: ${rel} (${strLen(content)} bytes, was ${prevSize} bytes)${warn}${writeWarnings(rel, before, content, parsed)}${stub}${deltaTag(delta.added, delta.removed)}`;
     }
-    return `File CREATED (новый файл): ${rel} (${strLen(content)} bytes). Если файл должен был существовать — путь неверен: проверь list_files родительской папки и повтори запись по верному пути.${warn}${writeWarnings(rel, null, content, parsed)}${deltaTag(delta.added, 0)}`;
+    return `File CREATED (новый файл): ${rel} (${strLen(content)} bytes). Если файл должен был существовать — путь неверен: проверь list_files родительской папки и повтори запись по верному пути.${warn}${writeWarnings(rel, null, content, parsed)}${stub}${deltaTag(delta.added, 0)}`;
   }
 
   if (name === 'replace_in_file') {
@@ -552,7 +583,10 @@ export function runTool(
 }
 
 /** The shell run_command uses on this OS (see shell.ts), named for the models. */
-export const SHELL_NAME = process.platform === 'win32' ? 'Windows: PowerShell' : process.platform === 'darwin' ? 'macOS: sh, zsh-compatible' : 'Linux: sh';
+// models write bash or cmd by habit (`&&`, `2>/dev/null`, `head`, `type nul >`): say what works here
+export const SHELL_NAME = process.platform === 'win32'
+  ? 'Windows PowerShell 5.1 — NOT bash/cmd: chain with `;` (no `&&`/`||`), no `2>/dev/null`/`head`/`grep`/`test -f` (use `Select-Object -First N`, `Select-String`, `Test-Path`), `curl.exe` not `curl`, new empty file: `New-Item -ItemType File path`'
+  : process.platform === 'darwin' ? 'macOS: sh, zsh-compatible' : 'Linux: sh';
 
 export function workspaceTools(webEnabled = true): unknown[] {
   const tool = (
