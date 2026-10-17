@@ -6,17 +6,17 @@ import * as os from 'os';
 import * as path from 'path';
 import type { AddressInfo } from 'net';
 import { Db } from '../db';
-import { FileClaims, nextGroup, parseStep } from '../steps';
+import { FileClaims, nextGroup, parseStep, afterOf, checkOf, dependencies, phaseOf, readyGroup, stepDetail } from '../steps';
 import { startTaskRun } from '../taskrunner';
 // these tests exercise the native tool-calling loop (guided mode has its own tests: guided.test.ts)
 process.env.OTTO_LOCAL_MODE = 'native';
 
 test('a leading ∥ / || / [parallel] marks a step that runs together with the previous one', () => {
-  assert.deepEqual(parseStep('∥ Экспорт в CSV'), { title: 'Экспорт в CSV', parallel: true });
-  assert.deepEqual(parseStep('|| Export'), { title: 'Export', parallel: true });
-  assert.deepEqual(parseStep('[Parallel] Export'), { title: 'Export', parallel: true });
-  assert.deepEqual(parseStep('[параллельно] Тесты'), { title: 'Тесты', parallel: true });
-  assert.deepEqual(parseStep('Обычный этап'), { title: 'Обычный этап', parallel: false });
+  assert.deepEqual(parseStep('∥ Экспорт в CSV'), { title: 'Экспорт в CSV', parallel: true, check: '', after: [] });
+  assert.deepEqual(parseStep('|| Export'), { title: 'Export', parallel: true, check: '', after: [] });
+  assert.deepEqual(parseStep('[Parallel] Export'), { title: 'Export', parallel: true, check: '', after: [] });
+  assert.deepEqual(parseStep('[параллельно] Тесты'), { title: 'Тесты', parallel: true, check: '', after: [] });
+  assert.deepEqual(parseStep('Обычный этап'), { title: 'Обычный этап', parallel: false, check: '', after: [] });
 });
 
 test('a group is the first unfinished step plus the parallel ones right after it (capped)', () => {
@@ -102,4 +102,35 @@ test('a plan written as a plain list is understood', async () => {
   const { parseListPlan } = await import('../taskrunner');
   assert.deepEqual(parseListPlan('План:\n1. **Шапка** сайта\n2) Футер\n- ∥ Стили\nитого'), ['Шапка сайта', 'Футер', '∥ Стили']);
   assert.deepEqual(parseListPlan('нет списка'), []);
+});
+
+test('a planned step carries its phase, the steps it needs and its check', () => {
+  const s = parseStep('[Бэкенд] Сервис книг: поиск и фильтры — после: 4, 6 — проверка: npx tsc --noEmit');
+  assert.deepEqual(s, { title: '[Бэкенд] Сервис книг: поиск и фильтры', parallel: false, check: 'npx tsc --noEmit', after: [4, 6] });
+  assert.equal(phaseOf(s.title), 'Бэкенд');
+  assert.deepEqual(parseStep('Docker — проверка: `docker compose config`'), { title: 'Docker', parallel: false, check: 'docker compose config', after: [] });
+  assert.deepEqual(parseStep('[Фронтенд] Каталог (after: #3 and #5)').after, []);
+  assert.deepEqual(parseStep('[Фронтенд] Каталог — after: 3 and 5').after, [3, 5]);
+  const detail = stepDetail(s);
+  assert.deepEqual(afterOf(detail), [4, 6]);
+  assert.equal(checkOf(detail), 'npx tsc --noEmit');
+});
+
+test('steps start when the steps they need are done; independent ones run side by side', () => {
+  const st = (status: string, after: number[] = [], parallel = false) => ({ status, parallel, detail: stepDetail({ check: '', after }) });
+  // 1 blueprint, 2 deps, 3 books (needs 2), 4 authors (needs 2), 5 frontend (needs 3, 4)
+  const plan = [st('done'), st('done'), st('todo', [2]), st('todo', [2]), st('todo', [3, 4])];
+  assert.deepEqual(readyGroup(plan, 4).map((s) => plan.indexOf(s) + 1), [3, 4], 'books and authors are independent');
+  assert.deepEqual(readyGroup(plan, 1).map((s) => plan.indexOf(s) + 1), [3], 'one at a time when parallel steps are off');
+  plan[2].status = 'done';
+  assert.deepEqual(readyGroup(plan, 4).map((s) => plan.indexOf(s) + 1), [4], 'the frontend still waits for authors');
+  plan[3].status = 'done';
+  assert.deepEqual(readyGroup(plan, 4).map((s) => plan.indexOf(s) + 1), [5]);
+  // no "после:" anywhere: the old sequence (and ∥ pairs) is kept
+  const seq = [st('todo'), st('todo', [], true), st('todo')];
+  assert.deepEqual(readyGroup(seq, 4).map((s) => seq.indexOf(s)), [0, 1]);
+  // a reference to a later or missing step never stalls the run
+  const odd = [st('todo', [9])];
+  assert.equal(readyGroup(odd, 1).length, 1);
+  assert.deepEqual(dependencies(seq), [[], [], [0, 1]]);
 });

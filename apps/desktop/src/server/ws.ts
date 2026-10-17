@@ -15,7 +15,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import type { ServerDeps } from './api';
 import { errorMessage } from './http';
 import { generateResponse } from './ollama';
-import { parseStep } from './steps';
+import { parseStep, stepDetail } from './steps';
 import { isDirectory, resolvePath } from './paths';
 import {
   interruptTerminal,
@@ -166,7 +166,7 @@ async function handleFrame(ws: WebSocket, raw: string, deps: ServerDeps): Promis
         const parent = deps.db.createTask(projectId, title, '', 'agent');
         for (const raw of steps) {
           const step = parseStep(raw);
-          deps.db.createTask(projectId, step.title, '', 'agent', parent.id, step.parallel);
+          deps.db.createTask(projectId, step.title, stepDetail(step), 'agent', parent.id, step.parallel);
         }
       } catch (exc) {
         console.log(`[tasks] agent plan_task failed: ${String(exc)}`);

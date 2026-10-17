@@ -276,6 +276,9 @@ export interface GenerateResponseOptions {
   interactive?: boolean;
   /** Aborted when the user stops the run: the model request and a running command end at once. */
   signal?: AbortSignal;
+  /** Plan steps: the whole task (it names the stack) and the step itself — skills are picked for the step. */
+  skillGoal?: string;
+  skillFocus?: string;
 }
 
 /** Raised for transport problems (mirrors `httpx.HTTPError`). */
@@ -720,6 +723,7 @@ export function isBadToolCall(detail: string): boolean {
 }
 
 const BAD_CALL_NUDGE = 'Your last tool call could not be read (its JSON arguments were cut off or invalid), so nothing ran. Call the tool again with valid JSON arguments; for a long file write the first part with write_file and the rest with append_file.';
+const BAD_CALL_SPLIT = 'It was cut off again: the content is too long for one answer. Write at most ~80 lines per call — write_file with the first part, then append_file for each next part (or move data such as seed records into a separate file).';
 
 const ACTION_NUDGE = 'You described actions but called no tool, so nothing was done. Do it now with the tools (run_command, otto_docker, otto_preview, write_file, ssh_connect…), then report only what really happened.';
 
@@ -1494,7 +1498,7 @@ ${webRules}Порядок работы:
 
 ПРОВЕРКА РЕЗУЛЬТАТА: создав или изменив HTML-страницу, ОБЯЗАТЕЛЬНО вызови preview_page (ошибки консоли, переполнение, битые ссылки) и run_in_page для ключевых сценариев (отправка формы, меню, кнопки: что реально показалось/скрылось). Чини найденное и проверяй снова. Слова «проверено/работает» разрешены ТОЛЬКО если инструмент это подтвердил; если проверить не удалось (нет браузера) — так и скажи.
 
-БОЛЬШИЕ ЗАДАЧИ: если работа состоит из многих независимых частей (несколько экранов, модулей, файлов) — сначала вызови plan_task(title, steps) с 3-10 конкретными этапами и остановись: пользователь запустит выполнение по этапам, каждый со свежим контекстом. Небольшие правки делай сразу.
+БОЛЬШИЕ ЗАДАЧИ: если работа состоит из многих частей (новый проект, несколько модулей/экранов, бэкенд + фронтенд + Docker) — сначала вызови plan_task(title, steps) и остановись: пользователь запустит выполнение по этапам, каждый со свежим контекстом. Этапы маленькие (1-3 файла), строка этапа: «[Фаза] что сделать — после: 2, 5 — проверка: <команда>»; этап 1 — «[Каркас] Записать .otto/blueprint.md» (стек, дерево папок, точные имена файлов/классов, поля, маршруты). Небольшие правки делай сразу.
 
 БОЛЬШИЕ ФАЙЛЫ: если файл длиннее ~300 строк — пиши по частям: write_file с первой частью, затем append_file со следующими. Один слишком длинный вызов обрывается и не записывается.
 
@@ -1524,7 +1528,8 @@ ${webRules}Порядок работы:
     .filter((h): h is { role: string; content: string } => Boolean(h) && typeof h === 'object' && (h as { role?: unknown }).role === 'user' && typeof (h as { content?: unknown }).content === 'string')
     .map((h) => stripChangesMarker(h.content));
   systemContent += '\n\n' + languageRule(options.prompt, earlierUserMessages);
-  if (toolsEnabled) systemContent += skillsPrompt(enabledSkills(root, profileKey(options.projectId, options.model)), options.prompt);
+  // a plan step gets only its own skills and no catalogue of the others: its window is for the step's files
+  if (toolsEnabled) systemContent += skillsPrompt(enabledSkills(root, profileKey(options.projectId, options.model)), options.skillGoal ?? options.prompt, !options.skillFocus, options.skillFocus ?? '');
   if (toolsEnabled) systemContent += '\n\n' + OTTO_GUIDE;
   if (toolsEnabled && connectorsNote()) systemContent += '\n\n' + connectorsNote();
   if (options.extraSystem) systemContent +='\n\n' + options.extraSystem;
@@ -1617,13 +1622,14 @@ ${webRules}Порядок работы:
   let runnerCrashRetries = 0;
   // a local model that started repeating itself (Ollama aborts it: "token repeat limit reached")
   let repeatRetries = 0;
-  // a tool call with broken JSON (llama-server "invalid tool call arguments") is a bad roll, not a dead end
+  // a tool call with broken JSON (llama-server "invalid tool call arguments") is a bad roll, not a dead end;
+  // counted in a row (a long run meets a few of them far apart — usually a file too long for one answer)
   let badCallRetries = 0;
   const retryBadCall = (detail: string): boolean => {
-    if (!isBadToolCall(detail) || badCallRetries >= 3) return false;
+    if (!isBadToolCall(detail) || badCallRetries >= 4) return false;
     badCallRetries++;
     console.warn(`[agent] ${activeModel} sent a broken tool call, retry ${badCallRetries}: ${detail.slice(0, 160)}`);
-    messages.push({ role: 'user', content: BAD_CALL_NUDGE });
+    messages.push({ role: 'user', content: badCallRetries > 1 ? `${BAD_CALL_NUDGE} ${BAD_CALL_SPLIT}` : BAD_CALL_NUDGE });
     return true;
   };
   // reasoning effort of this run (the Settings default unless the chat picked one)
@@ -2080,6 +2086,7 @@ ${webRules}Порядок работы:
         /** What the call returned goes to the loop watch; a write that changed nothing leaves the checkpoint. */
         const record = (out: string): void => {
           loop.after(name, argsObj, out);
+          badCallRetries = 0;
           if (madeProgress(name, out)) lastProgress = step;
           if (target) checkpoint.settle(target);
         };

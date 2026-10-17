@@ -6,7 +6,9 @@ import * as os from 'os';
 import * as path from 'path';
 import type { AddressInfo } from 'net';
 import { Db } from '../db';
-import { listTaskRuns, startTaskPlan, startTaskRun } from '../taskrunner';
+import { listTaskRuns, startTaskPlan, startTaskRun, stepPrompt } from '../taskrunner';
+import { stepDetail } from '../steps';
+import { configureAppSettings } from '../appconfig';
 // these tests exercise the native tool-calling loop (guided mode has its own tests: guided.test.ts)
 process.env.OTTO_LOCAL_MODE = 'native';
 
@@ -77,9 +79,10 @@ test('runner executes steps in order with fresh context and checks them off', as
     const step2First = ollama.requests[2].messages;
     assert.equal(step2First.filter((m) => m.role === 'user').length, 1);
     const prompt = step2First.find((m) => m.role === 'user')!.content;
-    assert.match(prompt, /1\. \[x\] Создать index\.html/);
-    assert.match(prompt, /итог: .*index\.html/);
-    assert.match(prompt, /ТОЛЬКО этап 2/);
+    assert.match(prompt, /выполнено 1/);
+    assert.match(prompt, /1\. Создать index\.html → ИТОГ: создан index\.html/);
+    assert.doesNotMatch(prompt, /:::changes/, 'the UI files card is not passed on');
+    assert.match(prompt, /ТОЛЬКО этап 2 из 2/);
   } finally {
     await ollama.close();
     db.close();
@@ -162,4 +165,70 @@ test('deleting a task removes its steps', () => {
   db.deleteTask(task.id);
   assert.equal(db.listTasks(projectId).length, 0);
   db.close();
+});
+
+test('a step gets the blueprint, the phases, the results of the steps it needs — not the whole plan', () => {
+  const row = (id: number, title: string, status: string, detail: string) =>
+    ({ id, title, status, detail, parallel: false, project_id: 1, parent_id: 9, source: 'agent', created_at: 0, updated_at: 0 }) as unknown as Parameters<typeof stepPrompt>[1][number];
+  const steps = [
+    row(1, '[Каркас] Записать .otto/blueprint.md', 'done', 'Каркас записан [файлы: .otto/blueprint.md]'),
+    row(2, '[Каркас] package.json и npm install', 'done', 'Зависимости поставлены [файлы: package.json]'),
+    ...Array.from({ length: 20 }, (_, i) => row(3 + i, `[Бэкенд] Модуль ${i + 1}`, 'done', `Модуль ${i + 1} готов [файлы: src/m${i + 1}.ts]`)),
+    row(23, '[Фронтенд] Каталог книг', 'todo', stepDetail({ after: [2, 5], check: 'npm run build' })),
+    row(24, '[Docker] Dockerfile', 'todo', ''),
+  ];
+  const prompt = stepPrompt({ title: 'Книжный магазин', detail: null }, steps, steps[22], 'Стек: NestJS 10, TypeORM, PostgreSQL 16');
+  assert.match(prompt, /Каркас проекта .*\n.*Стек: NestJS 10/);
+  assert.match(prompt, /Фазы: Каркас 2\/2 → Бэкенд 20\/20 → ▶ Фронтенд 0\/1 → Docker 0\/1/);
+  assert.match(prompt, /опирается на результаты этапов:\n- 2\. \[Каркас\] package\.json и npm install → Зависимости поставлены/);
+  assert.match(prompt, /- 5\. \[Бэкенд\] Модуль 3 → Модуль 3 готов/);
+  assert.match(prompt, /src\/m20\.ts/, 'files made so far are listed');
+  assert.doesNotMatch(prompt, /- 7\. \[Бэкенд\] Модуль 5 →/, 'an old step that this one does not need is not repeated');
+  assert.match(prompt, /НЕ делай их сейчас\): «\[Docker\] Dockerfile»/);
+  assert.match(prompt, /ТОЛЬКО этап 23 из 24: «\[Фронтенд\] Каталог книг»\nЭтап считается выполненным, только когда проходит проверка: `npm run build`/);
+  assert.ok(prompt.length < 4000, `stays small (${prompt.length} chars for 24 steps)`);
+});
+
+test('a step whose check fails is sent back with the output and done only when the check passes', async () => {
+  configureAppSettings((k) => (k === 'app.agent.shell' ? 'auto' : ''));
+  const { db, projectPath, projectId, deps } = setup();
+  const task = db.createTask(projectId, 'Конфиг', '', 'user');
+  const node = `node -e "process.exit(require('fs').readFileSync('flag.txt','utf8').trim()==='ok'?0:1)"`;
+  const step = db.createTask(projectId, 'Записать flag.txt', stepDetail({ check: node, after: [] }), 'user', task.id);
+  const ollama = await fakeOllama([
+    { tool_calls: [call('write_file', { path: 'flag.txt', content: 'bad' })] },
+    { content: 'ИТОГ: записал' },
+    { tool_calls: [call('write_file', { path: 'flag.txt', content: 'ok' })] },
+    { content: 'ИТОГ: исправил' },
+  ]);
+  try {
+    startTaskRun(deps, task.id);
+    await waitFor(() => listTaskRuns(projectId)[0]?.status !== 'running', 30000);
+    assert.equal(listTaskRuns(projectId)[0].status, 'done');
+    assert.equal(fs.readFileSync(path.join(projectPath, 'flag.txt'), 'utf8'), 'ok');
+    const retry = ollama.requests[2].messages.find((m) => m.role === 'user')!.content;
+    assert.match(retry, /ПРОВЕРКА ЭТАПА НЕ ПРОШЛА/);
+    assert.match(retry, /exit code 1/);
+    assert.match(db.getTask(step.id)!.detail, /проверка ✓/);
+  } finally {
+    configureAppSettings(() => '');
+    await ollama.close();
+    db.close();
+  }
+});
+
+test('without permission to run commands the check is skipped, never run unasked', async () => {
+  const { db, projectPath, projectId, deps } = setup();
+  const task = db.createTask(projectId, 'T', '', 'user');
+  const step = db.createTask(projectId, 'Файл', stepDetail({ check: 'node -e "require(\'fs\').writeFileSync(\'ran.txt\',\'1\')"', after: [] }), 'user', task.id);
+  const ollama = await fakeOllama([{ tool_calls: [call('write_file', { path: 'a.txt', content: 'x' })] }, { content: 'ИТОГ: ок' }]);
+  try {
+    startTaskRun(deps, task.id);
+    await waitFor(() => listTaskRuns(projectId)[0]?.status !== 'running');
+    assert.equal(fs.existsSync(path.join(projectPath, 'ran.txt')), false);
+    assert.match(db.getTask(step.id)!.detail, /проверка не запускалась: commands need approval/);
+  } finally {
+    await ollama.close();
+    db.close();
+  }
 });

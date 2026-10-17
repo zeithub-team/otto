@@ -416,6 +416,18 @@ test('the frameworks a request names get their skills first', () => {
   assert.ok(site.some((s) => s.name === 'responsive-mobile'));
 });
 
+test('a plan step gets the skills of its own job within the project stack', () => {
+  configureSkills({ getSetting: () => '' });
+  const on = enabledSkills(null);
+  const goal = 'Книжный магазин на NestJS + TypeORM + PostgreSQL, Docker compose, сайт по концепту';
+  const pick = (step: string) => pickSkills(on, goal, step).map((s) => s.name);
+  assert.deepEqual(pick('[Бэкенд] Сервис книг: поиск и пагинация'), ['nestjs'], 'nothing named: the main framework');
+  assert.deepEqual(pick('[Docker] Dockerfile и docker-compose.yml — проверка: docker compose config'), ['docker-compose']);
+  assert.ok(pick('[Данные] Миграции и сид для PostgreSQL').includes('postgres'));
+  assert.ok(pick('[Фронтенд] Вёрстка каталога: html, адаптив').every((n) => n !== 'docker-compose' && n !== 'postgres'));
+  assert.ok(pick('[Бэкенд] Модуль книг TypeORM').length <= 2);
+});
+
 test('a failed check is cleared only by the same kind of check passing', () => {
   assert.equal(sameCheck('php artisan test', 'php artisan test'), true);
   assert.equal(sameCheck('php artisan test', 'php artisan test --filter=BookTest'), true);

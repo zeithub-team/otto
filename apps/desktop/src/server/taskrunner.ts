@@ -7,12 +7,15 @@
  * overflowing one conversation, and every finished step is checked off on the
  * task board as soon as it completes.
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import { live } from './appconfig';
+import { dangerReason, describeResult, normalizeMode, runCommand } from './shell';
 import type { Db, TaskRow } from './db';
 import { generateResponse } from './ollama';
 import { isDirectory, resolvePath } from './paths';
 import { registerRun } from './agents';
-import { FileClaims, PARALLEL_RULES, nextGroup, parseStep } from './steps';
+import { FileClaims, PARALLEL_RULES, afterOf, checkOf, parseStep, phaseOf, readyGroup, stepDetail } from './steps';
 
 export type RunStatus = 'planning' | 'running' | 'done' | 'error' | 'stopped';
 
@@ -108,6 +111,9 @@ async function drive(
     onStopAll?: () => void;
     /** Live status: 'start' when the agent begins, then the tool it just used and the file it touched. */
     onActivity?: (tool: string, path?: string) => void;
+    /** A plan step: skills are chosen for the step (focus) within the task's stack (goal). */
+    skillGoal?: string;
+    skillFocus?: string;
   },
 ): Promise<DriveResult> {
   const result: DriveResult = { text: '', error: null, changed: [], ran: false };
@@ -126,6 +132,8 @@ async function drive(
     extraSystem: opts.extraSystem,
     onPlanTask: opts.onPlanTask,
     guardWrite: opts.guardWrite,
+    skillGoal: opts.skillGoal,
+    skillFocus: opts.skillFocus,
     onCreateTask: (title, detail) => {
       try {
         deps.db.createTask(opts.projectId, title, detail, 'agent');
@@ -168,21 +176,88 @@ async function drive(
   return result;
 }
 
-function checklist(steps: TaskRow[], currentId: number, parallelIds: number[] = []): string {
-  return steps
-    .map((s, i) => {
-      const mark = s.status === 'done' ? '[x]' : '[ ]';
-      const tail =
-        s.id === currentId
-          ? '   ← ТЕКУЩИЙ ЭТАП'
-          : parallelIds.includes(s.id)
-            ? '   ← выполняется параллельно другим агентом'
-            : s.status === 'done' && s.detail
-              ? `\n     итог: ${s.detail}`
-              : '';
-      return `${i + 1}. ${mark} ${s.title}${tail}`;
-    })
-    .join('\n');
+/** The project's blueprint: written by the first step of a plan, given to every later one. */
+export const BLUEPRINT = '.otto/blueprint.md';
+const MAX_BLUEPRINT = 4000;
+
+export function readBlueprint(projectPath: string): string {
+  try {
+    const text = fs.readFileSync(path.join(projectPath, BLUEPRINT), 'utf8').trim();
+    return text.length > MAX_BLUEPRINT ? `${text.slice(0, MAX_BLUEPRINT)}\n… (обрезано; полный текст — read_file ${BLUEPRINT})` : text;
+  } catch {
+    return '';
+  }
+}
+
+/** Files a finished step recorded in its summary ("[файлы: a, b]"). */
+const stepFiles = (detail: string | null): string[] => {
+  const m = /\[файлы: ([^\]]+)\]/.exec(detail ?? '');
+  return m ? m[1].split(',').map((f) => f.trim()).filter(Boolean) : [];
+};
+
+/**
+ * What one step of a plan is told. Not the whole history: the goal, the blueprint, a compact view of the plan
+ * (the last finished steps with their results, the files made so far, the next steps not to do yet) and the
+ * step itself with its check. Long plans (30-100 steps) stay small enough for a 32K local model.
+ */
+export function stepPrompt(
+  goal: { title: string; detail: string | null },
+  steps: TaskRow[],
+  step: TaskRow,
+  blueprint: string,
+  partners: TaskRow[] = [],
+): string {
+  const at = steps.indexOf(step);
+  const done = steps.filter((s) => s.status === 'done');
+  const result = (s: TaskRow): string => (s.detail && !/^(check|after): /m.test(s.detail) ? ` → ${s.detail.slice(0, 400)}` : '');
+  // the steps this one needs: their results in full, whatever their place in the plan
+  const needs = afterOf(step.detail).map((n) => steps[n - 1]).filter((s): s is TaskRow => Boolean(s) && s.status === 'done');
+  const recent = done.filter((s) => !needs.includes(s)).slice(-Math.max(2, 5 - needs.length));
+  const files = [...new Set(done.flatMap((s) => stepFiles(s.detail)))];
+  const next = steps.slice(at + 1).filter((s) => s.status !== 'done' && !partners.includes(s)).slice(0, 3);
+  const check = checkOf(step.detail);
+  // the plan's phases with their progress: where this step sits in the whole job
+  const phases = new Map<string, { done: number; all: number }>();
+  for (const s of steps) {
+    const p = phaseOf(s.title);
+    if (!p) continue;
+    const e = phases.get(p) ?? { done: 0, all: 0 };
+    e.all++;
+    if (s.status === 'done') e.done++;
+    phases.set(p, e);
+  }
+  const phase = phaseOf(step.title);
+  const parts = [
+    `Общая задача: ${goal.title}${goal.detail ? `\n${goal.detail.slice(0, 1500)}` : ''}`,
+    blueprint ? `Каркас проекта (${BLUEPRINT}) — имена, структура и договорённости, им следуй:\n${blueprint}` : '',
+    `План: ${steps.length} этапов, выполнено ${done.length}.` +
+      (phases.size > 1 ? `\nФазы: ${[...phases].map(([p, e]) => `${p === phase ? '▶ ' : ''}${p} ${e.done}/${e.all}`).join(' → ')}` : ''),
+    needs.length ? `Этот этап опирается на результаты этапов:\n${needs.map((s) => `- ${steps.indexOf(s) + 1}. ${s.title}${result(s)}`).join('\n')}` : '',
+    recent.length ? `Последние выполненные:\n${recent.map((s) => `- ${steps.indexOf(s) + 1}. ${s.title}${result(s)}`).join('\n')}` : '',
+    files.length ? `Уже созданы/изменены файлы (${files.length}): ${files.slice(0, 60).join(', ')}` : '',
+    partners.length ? `Параллельно с тобой выполняются: ${partners.map((s) => `«${s.title}»`).join(', ')}` : '',
+    next.length ? `Следующие этапы (НЕ делай их сейчас): ${next.map((s) => `«${s.title}»`).join('; ')}` : '',
+    `Выполни ТОЛЬКО этап ${at + 1} из ${steps.length}: «${step.title}»` +
+      (check ? `\nЭтап считается выполненным, только когда проходит проверка: \`${check}\` — Otto запустит её сам после тебя.` : ''),
+  ];
+  return parts.filter(Boolean).join('\n\n');
+}
+
+/** Result of a step's check command. */
+interface CheckResult { ok: boolean; skipped: string | null; output: string }
+
+/**
+ * Run a step's check. Only when commands may run without asking (agent.shell = auto: a task run has nobody to ask)
+ * and never a command from the danger list; otherwise the step is judged by its changes as before.
+ */
+async function runCheck(projectPath: string, command: string, isStopped: () => boolean): Promise<CheckResult> {
+  if (!command) return { ok: true, skipped: 'no check', output: '' };
+  if (normalizeMode(live<string>('agent.shell')) !== 'auto') return { ok: true, skipped: 'commands need approval', output: '' };
+  const danger = dangerReason(command);
+  if (danger) return { ok: true, skipped: `refused: ${danger}`, output: '' };
+  if (isStopped()) return { ok: true, skipped: 'stopped', output: '' };
+  const r = await runCommand(projectPath, command, 300);
+  return { ok: r.code === 0 && !r.timedOut && !r.cancelled, skipped: null, output: describeResult(command, r) };
 }
 
 const STEP_RULES =
@@ -229,7 +304,7 @@ export function startTaskRun(deps: Deps, taskId: number, model: string | null = 
       for (;;) {
         if (run.stopped) break;
         const steps = deps.db.listSteps(taskId);
-        const group = nextGroup(steps, limit);
+        const group = readyGroup(steps, limit);
         if (group.length === 0) break;
         run.stepId = group[0].id;
         run.stepIds = group.map((s) => s.id);
@@ -240,19 +315,20 @@ export function startTaskRun(deps: Deps, taskId: number, model: string | null = 
         touch();
 
         const fresh = deps.db.getTask(taskId);
+        const goal = { title: fresh?.title ?? task.title, detail: fresh?.detail ?? task.detail };
+        const blueprint = readBlueprint(projectPath);
         const claims = new FileClaims(); // files the steps of this group have taken
         const results = await Promise.all(
           group.map(async (step) => {
             const partners = group.filter((s) => s.id !== step.id);
-            const prompt =
-              `Общая задача: ${fresh?.title ?? task.title}\n` +
-              (fresh?.detail ? `${fresh.detail}\n` : '') +
-              `\nЧек-лист:\n${checklist(steps, step.id, partners.map((s) => s.id))}\n\n` +
-              `Выполни ТОЛЬКО этап ${steps.indexOf(step) + 1}: «${step.title}».`;
+            const prompt = stepPrompt(goal, steps, step, blueprint, partners);
+            const check = checkOf(step.detail);
             const attempt = (extra: string, n: number) => drive(deps, {
               projectId: task.project_id,
               projectPath,
               prompt: prompt + extra,
+              skillGoal: `${goal.title}\n${goal.detail ?? ''}\n${blueprint.slice(0, 600)}`,
+              skillFocus: `${step.title}\n${check}`,
               extraSystem: partners.length ? `${STEP_RULES}\n\n${PARALLEL_RULES}` : STEP_RULES,
               model,
               messageId: `task-${taskId}-${step.id}-${n}`,
@@ -280,21 +356,41 @@ export function startTaskRun(deps: Deps, taskId: number, model: string | null = 
             // only talked (an apology, "skill not found") without changing a file or running a command
             else if (!out.error && /Otto остановил работу|Otto stopped the run/.test(out.text)) out.error = 'Этап не выполнен: модель пошла по кругу и была остановлена.';
             else if (!out.error && out.changed.length === 0 && !out.ran) out.error = 'Этап не выполнен: модель не изменила ни одного файла и не выполнила ни одной команды.';
-            return { step, out };
+            // the step's own check decides, not the model's words: a failed check goes back with its output (twice)
+            let verdict: CheckResult = { ok: true, skipped: 'no check', output: '' };
+            if (!out.error && check) {
+              verdict = await runCheck(projectPath, check, () => run.stopped);
+              for (let n = 4; !verdict.ok && n <= 5 && !run.stopped; n++) {
+                run.activity[step.id] = { tool: 'check', at: Date.now() };
+                const retry = await attempt(
+                  `\n\nПРОВЕРКА ЭТАПА НЕ ПРОШЛА — этап не засчитан. Исправь причину (только то, что относится к этому этапу), Otto проверит снова:\n${verdict.output.slice(-2500)}`,
+                  n,
+                );
+                if (retry.error) { out.error = retry.error; break; }
+                out.changed.push(...retry.changed.filter((f) => !out.changed.includes(f)));
+                out.text = retry.text;
+                verdict = await runCheck(projectPath, check, () => run.stopped);
+              }
+              if (!out.error && !verdict.ok) out.error = `Этап не выполнен: проверка \`${check}\` не проходит.\n${verdict.output.slice(-800)}`;
+            }
+            return { step, out, verdict };
           }),
         );
 
         let failure: string | null = null;
-        for (const { step, out } of results) {
+        for (const { step, out, verdict } of results) {
           if (run.stopped) {
             deps.db.updateTask(step.id, { status: 'todo' });
           } else if (out.error) {
             deps.db.updateTask(step.id, { status: 'todo' });
             failure = failure ?? out.error;
           } else {
-            const summary = out.text.replace(/\s+/g, ' ').trim().slice(0, 500);
-            const files = out.changed.length ? ` [файлы: ${out.changed.slice(0, 6).join(', ')}]` : ' [файлы не менялись]';
-            deps.db.updateTask(step.id, { status: 'done', detail: (summary + files).trim() });
+            // the chat's files card (":::changes {json} :::") is for the UI, not for the next steps
+            const summary = out.text.replace(/:::changes[\s\S]*?:::/g, '').replace(/\s+/g, ' ').trim().slice(0, 500);
+            const files = out.changed.length ? ` [файлы: ${out.changed.slice(0, 12).join(', ')}]` : ' [файлы не менялись]';
+            const check = checkOf(step.detail);
+            const proof = !check ? '' : verdict.skipped ? ` [проверка не запускалась: ${verdict.skipped}]` : ` [проверка ✓ ${check}]`;
+            deps.db.updateTask(step.id, { status: 'done', detail: (summary + files + proof).trim() });
           }
         }
         touch();
@@ -343,15 +439,28 @@ export function startTaskRun(deps: Deps, taskId: number, model: string | null = 
   return view(run);
 }
 
-/** Steps from a plain-text plan: numbered or bulleted lines (3-10 of them are taken). */
+/** Steps from a plain-text plan: numbered or bulleted lines (up to 40 are taken). */
 export function parseListPlan(text: string): string[] {
   const items: string[] = [];
   for (const line of text.split(/\r?\n/)) {
     const m = /^\s*(?:\d{1,2}[.)]|[-*•])\s+(.{3,})$/.exec(line);
-    if (m) items.push(m[1].replace(/[*_`]+/g, '').trim());
+    // backticks stay: a check command may be quoted in them
+    if (m) items.push(m[1].replace(/\*\*|__/g, '').trim());
   }
-  return items.slice(0, 10);
+  return items.slice(0, 40);
 }
+
+/** How the planner is asked to break a big job down: phases, small steps, dependencies, checks, a blueprint first. */
+export const PLAN_RULES =
+  'Разбей работу на 8-40 МАЛЕНЬКИХ этапов (каждый — 1-3 файла, выполним отдельной моделью со свежим контекстом). Формат строки этапа:\n' +
+  '[Фаза] Что сделать (конкретно, с именами файлов) — после: 2, 5 — проверка: <команда>\n' +
+  '- [Фаза] — группа этапов: Каркас, Бэкенд, Фронтенд, Данные, Docker, Тесты, Проверка… (иерархия задачи).\n' +
+  '- «после: N, M» — номера этапов, результат которых нужен этому (их итоги он получит). Без «после:» этап ждёт все предыдущие. ' +
+  'Независимые этапы (разные файлы, не нужны результаты друг друга) указывай с «после:» только на общие основы — тогда они могут идти параллельно.\n' +
+  '- «проверка:» — команда, которая докажет, что этап сделан (npx tsc --noEmit, npm test -- books, php artisan route:list, docker compose config…). Без неё, если проверить нечем.\n' +
+  `- ЭТАП 1 всегда: «[Каркас] Записать ${BLUEPRINT}»: стек и версии, дерево папок, ТОЧНЫЕ имена файлов, модулей и классов, ` +
+  'поля сущностей, маршруты API, переменные окружения, дизайн-токены. Все остальные этапы следуют этому каркасу.\n' +
+  '- Затем этапы, которые ставят зависимости и конфиг (package.json / composer.json, npm install), — до кода, который их использует.';
 
 /** Ask the model to break a task into checklist steps (attached to `taskId`). */
 export function startTaskPlan(deps: Deps, taskId: number, model: string | null = null): TaskRun {
@@ -383,9 +492,7 @@ export function startTaskPlan(deps: Deps, taskId: number, model: string | null =
         projectPath,
         prompt:
           `Составь план для задачи: «${task.title}».\n${task.detail ? task.detail + '\n' : ''}` +
-          'Изучи проект (search_files/read_file), затем ОДИН раз вызови plan_task с 3-8 конкретными ' +
-          'этапами (каждый выполним отдельно, в порядке очереди). Если этап не зависит от результата ' +
-          'предыдущего и правит ДРУГИЕ файлы — начни его текст с «∥ »: такие этапы выполнятся параллельно. Файлы не изменяй.',
+          `Изучи проект (list_files/read_file, если в нём что-то есть), затем ОДИН раз вызови plan_task.\n${PLAN_RULES}\nФайлы не изменяй.`,
         extraSystem:
           'Сейчас твоя единственная цель — составить план через plan_task. Не выполняй саму работу и не пиши файлы.',
         model,
@@ -398,7 +505,7 @@ export function startTaskPlan(deps: Deps, taskId: number, model: string | null =
           if (created > 0) return;
           for (const raw of steps) {
             const s = parseStep(raw);
-            deps.db.createTask(task.project_id, s.title, '', 'agent', taskId, s.parallel);
+            deps.db.createTask(task.project_id, s.title, stepDetail(s), 'agent', taskId, s.parallel);
           }
           created = steps.length;
         },
@@ -412,7 +519,7 @@ export function startTaskPlan(deps: Deps, taskId: number, model: string | null =
             projectId: task.project_id,
             projectPath,
             prompt:
-              `Разбей задачу «${task.title}» на 3-8 конкретных этапов.\n${task.detail ? task.detail + '\n' : ''}` +
+              `Разбей задачу «${task.title}» на этапы.\n${task.detail ? task.detail + '\n' : ''}${PLAN_RULES}\n` +
               'Ответь ТОЛЬКО нумерованным списком: одна строка на этап, без вступления и пояснений. Инструменты не вызывай.',
             extraSystem: 'Отвечай только нумерованным списком этапов.',
             model,
@@ -426,7 +533,7 @@ export function startTaskPlan(deps: Deps, taskId: number, model: string | null =
         }
         for (const raw of list) {
           const st = parseStep(raw);
-          deps.db.createTask(task.project_id, st.title, '', 'agent', taskId, st.parallel);
+          deps.db.createTask(task.project_id, st.title, stepDetail(st), 'agent', taskId, st.parallel);
         }
         created = list.length;
       }

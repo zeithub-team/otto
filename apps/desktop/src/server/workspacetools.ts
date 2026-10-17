@@ -572,7 +572,7 @@ export function runTool(
     const list = (Array.isArray(steps) ? steps : [])
       .map((s) => String(s).replace(/^\s*(?:\d+[.)]|[-*•])\s*/, '').trim())
       .filter(Boolean)
-      .slice(0, 20);
+      .slice(0, 40);
     if (!title || list.length === 0) return "Usage: plan_task requires 'title' and a non-empty 'steps' array";
     if (!onPlanTask) return 'Task board is not available';
     onPlanTask(title, list);
@@ -665,7 +665,7 @@ export function workspaceTools(webEnabled = true): unknown[] {
     ),
     tool(
       'plan_task',
-      'Create a checklist plan on the task board for a LARGE multi-step job (3-10 concrete steps). title: overall goal; steps: ordered list of short, independently doable steps. Start a step with "∥ " when it touches DIFFERENT files than the step before it and does not need its result: those two then run in parallel. Use it BEFORE starting big work instead of trying to do everything in one go.',
+      'Create a checklist plan on the task board for a LARGE multi-step job (3-40 small concrete steps, each 1-3 files). title: overall goal; steps: ordered list of short, independently doable steps. End a step with " — проверка: <command>" when a command proves it done (npx tsc --noEmit, php artisan route:list, npm test…). Start a step with "∥ " when it touches DIFFERENT files than the step before it and does not need its result: those two then run in parallel. Use it BEFORE starting big work instead of trying to do everything in one go.',
       {
         title: { type: 'string', description: 'Overall goal' },
         steps: {
