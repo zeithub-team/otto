@@ -160,6 +160,21 @@ test('a model that falls into repeating itself is asked again instead of failing
   }
 });
 
+test('a tool call with broken JSON is asked again instead of ending the run', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'otto-badcall-'));
+  const ollama = await fake([
+    [{ error: 'llama-server returned invalid tool call arguments for "read_file": unexpected end of JSON input' }],
+    [{ message: { role: 'assistant', content: 'Готово.' }, done: false }, { message: { role: 'assistant', content: '' }, done: true }],
+  ]);
+  try {
+    const chunks = await run(root);
+    assert.ok(!chunks.some((c) => c.isError), 'no error card');
+    assert.match(chunks[chunks.length - 1].content, /Готово/);
+  } finally {
+    await ollama.close();
+  }
+});
+
 test('an empty answer after tool work asks for the summary instead of showing an error', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'otto-empty-'));
   fs.writeFileSync(path.join(root, 'a.txt'), 'hi\n');

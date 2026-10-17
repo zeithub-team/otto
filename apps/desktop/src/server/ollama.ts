@@ -714,6 +714,13 @@ export function pastedCommand(text: string): boolean {
   return /```(?:bash|sh|shell|powershell|ps1|cmd|console)?\n\s*(?:npm|npx|pnpm|yarn|pip|python|php|composer|git|node|cargo|go|dotnet|docker)\b/i.test(text);
 }
 
+/** The server could not parse the model's tool call (cut or malformed JSON arguments). */
+export function isBadToolCall(detail: string): boolean {
+  return /invalid tool call|error parsing tool call|tool call arguments|unexpected end of JSON|failed to parse.*tool/i.test(detail);
+}
+
+const BAD_CALL_NUDGE = 'Your last tool call could not be read (its JSON arguments were cut off or invalid), so nothing ran. Call the tool again with valid JSON arguments; for a long file write the first part with write_file and the rest with append_file.';
+
 const ACTION_NUDGE = 'You described actions but called no tool, so nothing was done. Do it now with the tools (run_command, otto_docker, otto_preview, write_file, ssh_connect…), then report only what really happened.';
 
 const CODE_NUDGE = 'Do not paste code into the chat: nothing was saved. Write it into the project files now by calling write_file (path and the whole content), one call per file; then open it with otto_preview if it is a page, and reply with a short summary of what you changed — without the code.';
@@ -1610,6 +1617,15 @@ ${webRules}Порядок работы:
   let runnerCrashRetries = 0;
   // a local model that started repeating itself (Ollama aborts it: "token repeat limit reached")
   let repeatRetries = 0;
+  // a tool call with broken JSON (llama-server "invalid tool call arguments") is a bad roll, not a dead end
+  let badCallRetries = 0;
+  const retryBadCall = (detail: string): boolean => {
+    if (!isBadToolCall(detail) || badCallRetries >= 3) return false;
+    badCallRetries++;
+    console.warn(`[agent] ${activeModel} sent a broken tool call, retry ${badCallRetries}: ${detail.slice(0, 160)}`);
+    messages.push({ role: 'user', content: BAD_CALL_NUDGE });
+    return true;
+  };
   // reasoning effort of this run (the Settings default unless the chat picked one)
   const EFFORTS = ['auto', 'off', 'low', 'medium', 'high', 'max'];
   const wantedEffort = String(options.effort || live<string>('agent.effort') || 'auto').toLowerCase();
@@ -1754,6 +1770,7 @@ ${webRules}Порядок работы:
       const response = await postChat(payload, options.signal);
       if (response.status !== 200) {
         const detail = await response.text();
+        if (retryBadCall(detail)) continue;
         // Model doesn't support the native tools API → retry without it.
         if (response.status === 400 && sendTools && /does not support tools/i.test(detail)) {
           sendTools = false;
@@ -1812,6 +1829,10 @@ ${webRules}Порядок работы:
           const raw = typeof chunk.error === 'string' ? chunk.error : JSON.stringify(chunk.error);
           // the model fell into repeating the same tokens: not a broken setup, just a bad roll — ask the
           // same turn again with livelier sampling (the half-written turn is dropped)
+          if (!toolCalls.length && retryBadCall(raw)) {
+            hadError = true;
+            break;
+          }
           if (/repeat limit|repetition/i.test(raw) && repeatRetries < 2) {
             repeatRetries++;
             sampling = {
