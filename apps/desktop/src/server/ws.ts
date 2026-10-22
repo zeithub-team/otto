@@ -23,7 +23,7 @@ import { generateResponse } from './ollama';
 import { parseStep, stepDetail } from './steps';
 import { isDirectory, resolvePath } from './paths';
 import { tasksNote } from './tasknote';
-import { applyRole, roleFor, roleOrChat, wantsExecution } from './roles';
+import { applyRole, roleFor, roleOrChat } from './roles';
 import { startTaskRun } from './taskrunner';
 import { activeRun, beginRun, controlOf, emit, endRun, injectMessage, stopRun, updateRun } from './chatruns';
 import {
@@ -289,7 +289,9 @@ async function handlePrompt(ws: WebSocket | null, messageData: ChatPayload, deps
     send(runState(chatId, false, { model: run.model }));
   }
   // "audit and fix", "make tasks and do them": the coder runs the plan stage by stage (task board, Agents tab)
-  if (role === 'planner' && planned !== null && wantsExecution(prompt) && !run.controller.signal.aborted) {
+  // a plan made in the chat is carried out right away — unless the user asked only for a plan
+  const planOnly = /(только|просто)s+(план|спланируй)|безs+выполнен|неs+(выполняй|запускай|делай)|plan only|just (a )?plan|don'?t (run|execute|start)/i.test(prompt);
+  if (planned !== null && !planOnly && !run.controller.signal.aborted) {
     try {
       const coder = roleOrChat('coder', model, chatEffort);
       startTaskRun(deps, planned, coder.model);

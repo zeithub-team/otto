@@ -444,6 +444,13 @@ export type OttoDockerAction = 'status' | 'validate' | 'up' | 'down' | 'runtime-
 interface DockerPlan { actions: Array<{ action: OttoDockerAction; service?: string }>; error?: string }
 
 /** Detect Docker Compose requests even when a model wraps them in PowerShell checks/conditionals. */
+/** Route `docker compose …` through Otto's Docker API only for projects that use otto.compose.yaml; a project with its own
+ *  docker-compose.yml gets the real command (the bridge answered 404 "save otto.compose.yaml" there). */
+function composePlanFor(root: string, command: string): DockerPlan | null {
+  const ottoFile = ['otto.compose.yaml', 'otto.compose.yml'].some((f) => fs.existsSync(path.join(root, f)));
+  return ottoFile ? dockerComposePlan(command) : null;
+}
+
 function dockerComposePlan(command: string): DockerPlan | null {
   const match = /\bdocker(?:\s+compose|-compose)\b/i.exec(command);
   if (!match) return null;
@@ -571,7 +578,7 @@ function bridgeTools(root: string, pid: number | null, showUrl?: (url: string) =
         if (!command) return 'run_command needs a non-empty "command".';
         const danger = dangerReason(command);
         if (danger) return `Refused: this command looks dangerous (${danger}). It is never run; do the job another way or ask the user to run it themselves.`;
-        const plan = dockerComposePlan(command);
+        const plan = composePlanFor(root, command);
         if (plan?.error) return plan.error;
         if (plan) {
           const outputs: string[] = [];
@@ -2267,7 +2274,7 @@ ${webRules}Порядок работы:
           const command = name === 'otto_docker'
             ? `Otto Docker: ${dockerAction}`
             : String(argsObj.command ?? '').trim();
-          const dockerPlan = name === 'run_command' ? dockerComposePlan(command) : null;
+          const dockerPlan = name === 'run_command' ? composePlanFor(root, command) : null;
           const mode = normalizeMode(live<string>('agent.shell'));
           const allowedDockerActions = new Set<string>(['status', 'validate', 'up', 'down', 'runtime-up', 'runtime-down', 'service-start', 'service-stop', 'service-restart', 'service-logs']);
           const danger = name === 'run_command' && command ? dangerReason(command) : null;
