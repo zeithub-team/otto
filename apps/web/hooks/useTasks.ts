@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Task, TaskRun } from '../types';
+import { playSound } from '../lib/sounds';
 import {
   createTask,
   deleteTask,
@@ -24,6 +25,8 @@ export function useTasks(projectId?: number) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cancelledRef = useRef(false);
+  const runsRef = useRef<TaskRun[]>([]);
+  const loadedRef = useRef(false);
 
   const load = useCallback(async () => {
     if (!projectId) {
@@ -35,6 +38,17 @@ export function useTasks(projectId?: number) {
       const [rows, runRows] = await Promise.all([fetchTasks(projectId), fetchTaskRuns(projectId)]);
       if (cancelledRef.current) return;
       setAll(rows);
+      // sounds: a run that just started, and one that just finished (all steps or with an error)
+      const before = new Map(runsRef.current.map((r) => [r.taskId, r.status]));
+      for (const r of runRows) {
+        const was = before.get(r.taskId);
+        const active = (s?: string) => s === 'running' || s === 'planning';
+        if (!active(was) && active(r.status) && loadedRef.current) playSound('start'); // not for runs already going when the view opens
+        if (active(was) && r.status === 'done') playSound('done');
+        if (active(was) && r.status === 'error') playSound('error');
+      }
+      runsRef.current = runRows;
+      loadedRef.current = true;
       setRuns(runRows);
     } catch {
       /* backend unreachable — keep the current view */
@@ -45,6 +59,9 @@ export function useTasks(projectId?: number) {
 
   useEffect(() => {
     cancelledRef.current = false;
+    // another project: its runs are not news
+    runsRef.current = [];
+    loadedRef.current = false;
     setLoading(true);
     void load().finally(() => {
       if (!cancelledRef.current) setLoading(false);

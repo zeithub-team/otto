@@ -3,7 +3,8 @@
 import { CHANGELOG } from '../../lib/changelog';
 import { SubscriptionAuth } from './ClaudeCliAuth';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Palette, Check, Languages, SlidersHorizontal, Cpu, Bot, FolderCog, SquareTerminal, Server, Info, Loader2, FolderOpen, RotateCcw, Zap, ShieldCheck } from 'lucide-react';
+import { Palette, Check, Languages, SlidersHorizontal, Cpu, Bot, FolderCog, SquareTerminal, Server, Info, Loader2, FolderOpen, RotateCcw, Zap, ShieldCheck, Volume2 } from 'lucide-react';
+import { playSound, setSoundsEnabled, soundsEnabled } from '../../lib/sounds';
 import { CloudProviders } from './CloudProviders';
 import { SkillsPanel } from './SkillsPanel';
 import { ProjectsRoot } from './ProjectsRoot';
@@ -94,7 +95,29 @@ function General() {
           })}
         </div>
       </Section>
+      <SoundsSection />
     </>
+  );
+}
+
+function SoundsSection() {
+  const { t } = useT();
+  const [on, setOn] = useState(true);
+  useEffect(() => { setOn(soundsEnabled()); }, []);
+  const toggle = () => { const next = !on; setSoundsEnabled(next); setOn(next); if (next) playSound('done', true); };
+  return (
+    <Section icon={Volume2} title={t('set.sounds')} hint={t('set.sounds.hint')}>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={toggle} aria-pressed={on} className={`rounded-lg border px-3 py-2 text-sm ${on ? 'border-[var(--accent)] bg-[var(--accent-glow)] text-[var(--text-primary)]' : 'border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-secondary)]'}`}>
+          {on ? t('set.sounds.on') : t('set.sounds.off')}
+        </button>
+        {(['start', 'answer', 'done', 'error'] as const).map((k) => (
+          <button key={k} type="button" onClick={() => playSound(k, true)} className="rounded-lg border border-[var(--border-color)] px-2.5 py-1.5 text-xs text-[var(--text-secondary)] hover:border-[var(--accent)]/40 hover:text-[var(--accent)]">
+            ▶ {t(`set.sounds.${k}`)}
+          </button>
+        ))}
+      </div>
+    </Section>
   );
 }
 

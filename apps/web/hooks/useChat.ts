@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { ChatMessage, SendOptions } from '../types';
 import { getProjectModel } from '../lib/modelStore';
+import { playSound } from '../lib/sounds';
 
 /** How the last agent run ended. */
 export interface RunSummary {
@@ -223,6 +224,8 @@ export function useChat(projectId?: number, chatId?: number) {
           return [...base, msg];
         });
         if (msg.isStreaming === false || msg.isError || (msg.role === 'assistant' && !msg.isStreaming)) {
+          // one sound per reply: the first final chunk while a request was in flight
+          if (isProcessingRef.current) playSound(msg.isError ? 'error' : 'answer');
           setIsProcessing(false);
         }
       },
@@ -322,6 +325,7 @@ export function useChat(projectId?: number, chatId?: number) {
     };
     setMessages((prev) => [...prev, userMsg]);
     setIsProcessing(true);
+    playSound('start');
 
     dispatchPrompt(content, images, userMsg.id, options);
   }, [projectId, generateId, dispatchPrompt]);
