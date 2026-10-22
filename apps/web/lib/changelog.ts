@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.11',
+    date: '2026-10-22',
+    items: [
+      'The model can ask you to choose between options with buttons in the chat',
+      'Sounds when a request starts, an answer arrives and a task is done (Settings → General)',
+      'Otto stops repeating the same action in a loop and says so instead',
+      'Per-model harness profiles and a bench for measuring multi-step tasks',
+      'The local API is protected with a session token; chats no longer wait for each other',
+    ],
+  },
+  {
     version: '0.1.10',
     date: '2026-10-12',
     items: [
