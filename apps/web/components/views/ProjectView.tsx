@@ -381,6 +381,78 @@ export function ProjectView({ projectId, navRequest }: ProjectViewProps) {
     }
   };
 
+  // multi-select in the explorer: Ctrl/Cmd+click toggles, Shift+click picks a range, dragging on empty space draws a box
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [anchor, setAnchor] = useState<string | null>(null);
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const treeRef = useRef<HTMLDivElement | null>(null);
+  const rowPaths = (): string[] => Array.from(treeRef.current?.querySelectorAll<HTMLElement>('[data-path]') ?? []).map((el) => el.dataset.path!);
+  const pickClick = (e: React.MouseEvent, path: string): boolean => {
+    if (e.ctrlKey || e.metaKey) {
+      setPicked((prev) => {
+        const next = new Set(prev.size ? prev : focusPath ? [focusPath] : []);
+        if (next.has(path)) next.delete(path); else next.add(path);
+        return next;
+      });
+      setAnchor(path);
+      return true;
+    }
+    if (e.shiftKey) {
+      const order = rowPaths();
+      const a = order.indexOf(anchor ?? focusPath ?? path);
+      const b = order.indexOf(path);
+      if (a >= 0 && b >= 0) setPicked(new Set(order.slice(Math.min(a, b), Math.max(a, b) + 1)));
+      return true;
+    }
+    setPicked(new Set());
+    setAnchor(path);
+    return false;
+  };
+  const startBox = (e: React.MouseEvent) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('[data-path]')) return;
+    const host = treeRef.current;
+    if (!host) return;
+    const add = e.ctrlKey || e.metaKey;
+    const base = add ? new Set(picked) : new Set<string>();
+    const x0 = e.clientX; const y0 = e.clientY;
+    const move = (ev: MouseEvent) => {
+      const r = { x0, y0, x1: ev.clientX, y1: ev.clientY };
+      setBox(r);
+      const top = Math.min(r.y0, r.y1); const bottom = Math.max(r.y0, r.y1);
+      const hit = new Set(base);
+      for (const el of host.querySelectorAll<HTMLElement>('[data-path]')) {
+        const b = el.getBoundingClientRect();
+        if (b.bottom >= top && b.top <= bottom) hit.add(el.dataset.path!);
+      }
+      setPicked(hit);
+    };
+    const up = () => { setBox(null); window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+  const deletePicked = async () => {
+    setCtxMenu(null);
+    if (!projectId || !picked.size) return;
+    // a folder already covers what is inside it
+    const paths = Array.from(picked).filter((p) => !Array.from(picked).some((q) => q !== p && p.startsWith(`${q}/`)));
+    const ok = await confirm({ title: t('pv.deleteTitle'), message: t('pv.deleteManyMsg', { n: paths.length }), danger: true, confirmText: t('common.delete') });
+    if (!ok) return;
+    const gone = (p: string) => paths.some((d) => p === d || p.startsWith(`${d}/`));
+    let failed = 0;
+    for (const p of paths) { try { await deleteProjectEntry(projectId, p); } catch { failed++; } }
+    const remaining = openTabs.filter((p) => !gone(p));
+    setOpenTabs(remaining);
+    setDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !gone(k))));
+    setSavedContents((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !gone(k))));
+    setTabEntries((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !gone(k))));
+    if (selectedFile && gone(selectedFile)) { const next = remaining[remaining.length - 1] ?? null; setSelectedFile(next); setFileContent(next ? savedContents[next] ?? '' : ''); }
+    setExpanded((prev) => new Set(Array.from(prev).filter((p) => !gone(p))));
+    setPicked(new Set()); setFocusPath(null);
+    for (const parent of new Set(paths.map(parentOf))) await refreshFolder(parent);
+    setDropMsg(t('pv.deletedMany', { n: paths.length - failed }) + (failed ? ` · ${t('pv.deleteFail')} (${failed})` : ''));
+    window.setTimeout(() => setDropMsg(null), 4000);
+  };
+
   const deleteEntry = async (item: FileInfo) => {
     setCtxMenu(null);
     if (!projectId) return;
@@ -664,6 +736,7 @@ export function ProjectView({ projectId, navRequest }: ProjectViewProps) {
         return (
           <div key={item.path}>
             <div
+              data-path={item.path}
               draggable
               onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('text/otto-path', item.path); e.dataTransfer.effectAllowed = 'move'; }}
               onDragOver={isDir ? (e) => { e.preventDefault(); e.stopPropagation(); setDropTarget(item.path); } : undefined}
@@ -676,6 +749,8 @@ export function ProjectView({ projectId, navRequest }: ProjectViewProps) {
               className={`group flex items-center gap-1.5 px-2 py-1 cursor-pointer rounded text-sm transition-colors ${
                 dropTarget === item.path
                   ? 'bg-[var(--accent-glow)] ring-1 ring-[var(--accent)]/50'
+                  : picked.has(item.path)
+                    ? 'bg-[var(--accent)]/20 text-[var(--text-primary)] ring-1 ring-[var(--accent)]/40'
                   : selectedFile === item.path
                     ? 'bg-[var(--accent-glow)] text-[var(--accent)]'
                     : matchPaths !== null && !isDir && matchPaths.has(item.path)
@@ -683,8 +758,8 @@ export function ProjectView({ projectId, navRequest }: ProjectViewProps) {
                       : `text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]${matchPaths !== null && !isDir ? ' opacity-40' : ''}`
               }`}
               style={{ paddingLeft: `${depth * 12 + 4}px` }}
-              onClick={() => { setFocusPath(item.path); if (renaming !== item.path) { if (isDir) void toggleFolder(item); else void openFile(item); } }}
-              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setFocusPath(item.path); setCtxMenu({ x: e.clientX, y: e.clientY, item, parent: isDir ? item.path : parentOf(item.path) }); }}
+              onClick={(e) => { if (pickClick(e, item.path)) return; setFocusPath(item.path); if (renaming !== item.path) { if (isDir) void toggleFolder(item); else void openFile(item); } }}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!picked.has(item.path)) setPicked(new Set()); setFocusPath(item.path); setCtxMenu({ x: e.clientX, y: e.clientY, item, parent: isDir ? item.path : parentOf(item.path) }); }}
               title={item.path}
             >
               {isDir ? (
@@ -739,6 +814,9 @@ export function ProjectView({ projectId, navRequest }: ProjectViewProps) {
         tabIndex={-1}
         onKeyDown={(e) => {
           if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+          if (e.key === 'Delete' && picked.size > 1) { e.preventDefault(); void deletePicked(); return; }
+          if (e.key === 'Escape' && picked.size) { setPicked(new Set()); return; }
+          if ((e.ctrlKey || e.metaKey) && matchHotkey(e, 'KeyA', 'a', 'ф')) { e.preventDefault(); setPicked(new Set(rowPaths())); return; }
           const all = [...files, ...Object.values(children).flat()];
           const item = focusPath ? all.find((f) => f.path === focusPath) : undefined;
           if (!item) return;
@@ -817,7 +895,9 @@ export function ProjectView({ projectId, navRequest }: ProjectViewProps) {
           </div>
         ) : (
           <div
-            className={`flex-1 overflow-y-auto p-1 ${dropTarget === '' ? 'bg-[var(--accent-glow)]/30' : ''}`}
+            ref={treeRef}
+            onMouseDown={startBox}
+            className={`relative flex-1 select-none overflow-y-auto p-1 ${dropTarget === '' ? 'bg-[var(--accent-glow)]/30' : ''}`}
             onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, item: null, parent: '' }); }}
             onDragOver={(e) => { e.preventDefault(); setDropTarget(''); }}
             onDragLeave={() => setDropTarget((t) => (t === '' ? null : t))}
@@ -827,6 +907,7 @@ export function ProjectView({ projectId, navRequest }: ProjectViewProps) {
               const from = e.dataTransfer.getData('text/otto-path'); if (from) void moveEntry(from, '');
             }}
           >
+            {box && <div className="pointer-events-none fixed z-50 border border-[var(--accent)] bg-[var(--accent)]/10" style={{ left: Math.min(box.x0, box.x1), top: Math.min(box.y0, box.y1), width: Math.abs(box.x1 - box.x0), height: Math.abs(box.y1 - box.y0) }} />}
             {dropMsg && <div className="mx-1 mb-1 rounded-md border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 py-1 text-[11px] text-[var(--text-secondary)]">{dropMsg}</div>}
             {isLoading ? (
               <div className="p-3 text-sm text-[var(--text-muted)]">{t('common.loading')}</div>
@@ -1011,7 +1092,9 @@ export function ProjectView({ projectId, navRequest }: ProjectViewProps) {
           x={ctxMenu.x}
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
-          items={ctxMenu.item ? (() => {
+          items={ctxMenu.item && picked.size > 1 && picked.has(ctxMenu.item.path) ? [
+            { label: t('pv.deletePicked', { n: picked.size }), hint: 'Del', icon: Trash2, danger: true, run: () => void deletePicked() },
+          ] : ctxMenu.item ? (() => {
             const it = ctxMenu.item;
             return [
               ...(it.is_dir

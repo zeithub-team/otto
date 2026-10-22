@@ -2,7 +2,9 @@
 .bg-\[var\(--accent-glow\)\]\/30 { background-color: color-mix(in srgb, var(--accent-glow) 30%, transparent); }
 .bg-\[var\(--accent-glow\)\]\/40 { background-color: color-mix(in srgb, var(--accent-glow) 40%, transparent); }
 .bg-\[var\(--accent-glow\)\]\/60 { background-color: color-mix(in srgb, var(--accent-glow) 60%, transparent); }
+.bg-\[var\(--accent\)\]\/10 { background-color: color-mix(in srgb, var(--accent) 10%, transparent); }
 .bg-\[var\(--accent\)\]\/15 { background-color: color-mix(in srgb, var(--accent) 15%, transparent); }
+.bg-\[var\(--accent\)\]\/20 { background-color: color-mix(in srgb, var(--accent) 20%, transparent); }
 .bg-\[var\(--accent\)\]\/30 { background-color: color-mix(in srgb, var(--accent) 30%, transparent); }
 .bg-\[var\(--bg-primary\)\]\/40 { background-color: color-mix(in srgb, var(--bg-primary) 40%, transparent); }
 .bg-\[var\(--bg-primary\)\]\/50 { background-color: color-mix(in srgb, var(--bg-primary) 50%, transparent); }
@@ -27,6 +29,7 @@
 .border-\[var\(--success\)\]\/30 { border-color: color-mix(in srgb, var(--success) 30%, transparent); }
 .border-\[var\(--warning\)\]\/30 { border-color: color-mix(in srgb, var(--warning) 30%, transparent); }
 .border-\[var\(--warning\)\]\/50 { border-color: color-mix(in srgb, var(--warning) 50%, transparent); }
+.ring-\[var\(--accent\)\]\/40 { --tw-ring-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .ring-\[var\(--accent\)\]\/50 { --tw-ring-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 .text-\[var\(--text-muted\)\]\/70 { color: color-mix(in srgb, var(--text-muted) 70%, transparent); }
 .focus-within\:border-\[var\(--accent\)\]\/50:focus-within { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
