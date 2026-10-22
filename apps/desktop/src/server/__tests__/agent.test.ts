@@ -184,3 +184,38 @@ test('a crashed model runner (500) is retried with a smaller context instead of 
     await new Promise<void>((r) => server.close(() => r()));
   }
 });
+
+test('ask_user shows a question card, waits for the pick and gives it to the model', async () => {
+  const { resolveChoice } = await import('../shell');
+  const fake = await fakeOllama([
+    { tool_calls: [call('ask_user', { question: 'Which database?', options: ['PostgreSQL', 'MySQL'] })] },
+    { content: 'Using MySQL.' },
+  ]);
+  try {
+    const chunks: Array<Record<string, any>> = [];
+    for await (const raw of generateResponse({ prompt: 'set up a database', messageId: 'q1', projectId: 1, projectPath: project(), model: 'fake:1b', useTools: true, interactive: true })) {
+      const c = JSON.parse(raw);
+      chunks.push(c);
+      if (c.role === 'question' && c.status === 'pending') {
+        assert.deepEqual(c.options, ['PostgreSQL', 'MySQL']);
+        setTimeout(() => resolveChoice(c.questionId, 'MySQL'), 10);
+      }
+    }
+    assert.ok(chunks.some((c) => c.role === 'question' && c.status === 'answered' && c.answer === 'MySQL'));
+    const toolMsg = fake.requests[1].messages.find((m: any) => m.role === 'tool');
+    assert.match(String(toolMsg?.content), /The user chose: "MySQL"/);
+  } finally { await fake.close(); }
+});
+
+test('ask_user in a background run does not wait: the model decides itself', async () => {
+  const fake = await fakeOllama([
+    { tool_calls: [call('ask_user', { question: 'Which database?', options: ['PostgreSQL', 'MySQL'] })] },
+    { content: 'Chose PostgreSQL.' },
+  ]);
+  try {
+    const chunks = await run(project(), 'set up a database');
+    assert.ok(!chunks.some((c) => c.role === 'question'), 'no card without a chat');
+    const toolMsg = fake.requests[1].messages.find((m: any) => m.role === 'tool');
+    assert.match(String(toolMsg?.content), /Nobody can answer/);
+  } finally { await fake.close(); }
+});

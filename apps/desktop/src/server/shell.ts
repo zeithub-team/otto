@@ -62,9 +62,34 @@ export function resolveApproval(id: string, allow: boolean): boolean {
   return true;
 }
 
+// ------------------------------------------------------------------ choices --
+
+/** ask_user: the model asked the user to pick one of a few options in the chat. */
+const choices = new Map<string, { resolve: (answer: string | null) => void; timer: NodeJS.Timeout }>();
+const CHOICE_TIMEOUT_MS = 30 * 60_000;
+
+export function requestChoice(): { id: string; answer: Promise<string | null> } {
+  const id = randomUUID();
+  const answer = new Promise<string | null>((resolve) => {
+    const timer = setTimeout(() => { choices.delete(id); resolve(null); }, CHOICE_TIMEOUT_MS);
+    choices.set(id, { resolve, timer });
+  });
+  return { id, answer };
+}
+
+export function resolveChoice(id: string, answer: string | null): boolean {
+  const c = choices.get(id);
+  if (!c) return false;
+  clearTimeout(c.timer);
+  choices.delete(id);
+  c.resolve(answer);
+  return true;
+}
+
 /** A chat that is stopped mid-question must not leave the agent waiting forever. */
 export function denyAllPending(): void {
   for (const id of Array.from(pending.keys())) resolveApproval(id, false);
+  for (const id of Array.from(choices.keys())) resolveChoice(id, null);
 }
 
 // --------------------------------------------------------------------- running --

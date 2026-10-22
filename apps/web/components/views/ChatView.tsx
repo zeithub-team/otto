@@ -8,6 +8,7 @@ import { Logo, LogoMark } from '../brand/Logo';
 import type { ChatMessage } from '../../types';
 import { SubscriptionAuth } from './ClaudeCliAuth';
 import { ApprovalCard } from './ApprovalCard';
+import { QuestionCard } from './QuestionCard';
 import { useT } from '../../lib/i18n';
 import { ChangesCard, RunStatus, ThinkingBlock, parseChanges } from './RunBlocks';
 
@@ -427,6 +428,9 @@ export function ChatView({ messages, isProcessing, onSelectSuggestion, onRegener
               }
               if (msg.role === 'approval') {
                 return <ApprovalCard key={msg.id} msg={msg} />;
+              }
+              if (msg.role === 'question') {
+                return <QuestionCard key={msg.id} msg={msg} />;
               }
               if (msg.role === 'activity') {
                 const runKey = run[0].id;

@@ -19,7 +19,7 @@ import { activatePhp, activeBranch, availableBuilds, iniFile, installPhp, listIn
 import { isPluginName, readPlugin, writePlugin } from './pluginstore';
 import { claudeLimits, cliAuthStatus, openCliLogin } from './claudecli';
 import { codexStatus, openCodexLogin } from './codexcli';
-import { listBackground, resolveApproval } from './shell';
+import { listBackground, resolveApproval, resolveChoice } from './shell';
 import { DBX_ROUTES, handleDbxRoute } from './dbxroutes';
 import { detectProjectDatabases } from './dbdetect';
 import { SSH_ROUTES, handleSshRoute } from './sshroutes';
@@ -247,6 +247,7 @@ const ROUTES: RouteSpec[] = [
   { path: '/api/nav', methods: ['GET'] },
   { path: '/api/logs', methods: ['GET'] },
   { path: '/api/agent/approval', methods: ['POST'] },
+  { path: '/api/agent/choice', methods: ['POST'] },
   { path: '/api/claude-cli/status', methods: ['GET'] },
   { path: '/api/claude-cli/login', methods: ['POST'] },
   { path: '/api/codex-cli/status', methods: ['GET'] },
@@ -1903,6 +1904,13 @@ export async function handleApi(
     if (pathname === '/api/agent/approval' && method === 'POST') {
       const body = (await readJsonBody(req)) as Record<string, unknown>;
       sendJson(res, 200, { ok: resolveApproval(String(body.id ?? ''), body.allow === true) });
+      return true;
+    }
+    // the user's pick on an ask_user card (null = skipped: the agent decides itself)
+    if (pathname === '/api/agent/choice' && method === 'POST') {
+      const body = (await readJsonBody(req)) as Record<string, unknown>;
+      const answer = typeof body.answer === 'string' && body.answer.trim() ? body.answer.trim().slice(0, 2000) : null;
+      sendJson(res, 200, { ok: resolveChoice(String(body.id ?? ''), answer) });
       return true;
     }
     if (pathname === '/api/agent/background' && method === 'GET') {

@@ -24,7 +24,7 @@ import { compactMessages, readLimitChars, sliceFile } from './context';
 import { enabledSkills, profileKey, readSkillFile, skillByName, skillFiles, skillsPrompt } from './skills';
 import { codexItemActivity, codexUsage, findCodex, isCodexModel, isNoAccessError, markCodexUnavailable, runCodex, usableCodexModels } from './codexcli';
 import { cliToolTarget, cliUsage, findClaude, isCliNoAccess, isCliModel, ottoToolName, rememberClaudeLimits, runClaudeCli, withHistory } from './claudecli';
-import { describeResult, dangerReason, normalizeMode, requestApproval, runCommand, startBackground } from './shell';
+import { describeResult, dangerReason, normalizeMode, requestApproval, requestChoice, runCommand, startBackground } from './shell';
 import { describeRateLimit, listAllCloudModels, providerChat, providerForModel } from './providers';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -1235,6 +1235,14 @@ function workspaceTools(webEnabled = true): unknown[] {
       ['width'],
     ),
     tool(
+      'ask_user',
+      'Ask the user to choose between 2-4 options when the request is genuinely ambiguous and a wrong guess would waste work (which database, rewrite or patch, which of two designs). Not for things you can find out yourself (read the files) or decide sensibly. The chat shows the options as buttons; you get the chosen option back. Ask at most once in a row: do some work between questions.',
+      {
+        question: { type: 'string', description: 'One short question' },
+        options: { type: 'array', items: { type: 'string' }, description: '2 to 4 short answer options' },
+      },
+    ),
+    tool(
       'use_skill',
       'Load a skill: a pack of expert rules for a kind of work (see the list of available skills in the system prompt). Call it BEFORE starting such work.',
       { name: { type: 'string', description: 'Skill name from the list' } },
@@ -2213,6 +2221,8 @@ ${webRules}Порядок работы:
   // shrink the request once, then move on to another model instead of stopping.
   // code pasted into the chat instead of written to files: the model is sent back to write_file (twice at most)
   let codeNudges = 0;
+  // the tool called just before (ask_user may not follow itself)
+  let lastToolName = '';
   // "starting… done" without a single tool call: nothing happened, send the model back once
   let toolCallsTotal = 0;
   let actionNudges = 0;
@@ -2603,11 +2613,38 @@ ${webRules}Порядок работы:
         const norm = normalizeToolCall(raw.name ?? '', raw.arguments ?? {});
         const fn = { name: norm.name, arguments: norm.args };
         const name = fn.name;
+        const prevTool = lastToolName;
+        lastToolName = name;
         const argsObj = (fn.arguments && typeof fn.arguments === 'object' ? fn.arguments : {}) as Record<string, unknown>;
         const paths = activityPaths(fn.arguments);
         const actId = `act-${msgId}-${step}-${i}`;
         if (name !== 'run_command') yield activity('tool_start', name, paths, actId);
         let result: string;
+        if (name === 'ask_user') {
+          const question = String(argsObj.question ?? '').trim().slice(0, 300);
+          const opts = (Array.isArray(argsObj.options) ? argsObj.options : typeof argsObj.options === 'string' ? String(argsObj.options).split(/\n|\s*\|\s*/) : [])
+            .map((o) => String(o).trim().slice(0, 120)).filter(Boolean).slice(0, 4);
+          if (!options.interactive) {
+            result = 'Nobody can answer in this run (it runs in the background). Decide yourself, say in the answer which option you chose and why, and continue.';
+          } else if (prevTool === 'ask_user') {
+            result = 'You just asked a question. Do the work with that answer before asking again.';
+          } else if (!question || opts.length < 2) {
+            result = 'ask_user needs "question" and 2-4 "options".';
+          } else {
+            const ask = requestChoice();
+            const card = (status: 'pending' | 'answered' | 'skipped', answer?: string) => JSON.stringify({
+              id: `question-${ask.id}`, role: 'question', questionId: ask.id, question, options: opts, status, answer, content: question, timestamp: ts, projectId: pid,
+            });
+            yield card('pending');
+            const answer = await ask.answer;
+            yield card(answer ? 'answered' : 'skipped', answer ?? undefined);
+            result = answer ? `The user chose: "${answer}". Continue with it.` : 'The user did not choose. Decide yourself, say which option you took and why, and continue.';
+          }
+          yield activity('tool_end', name, paths, actId);
+          messages.push({ role: 'tool', tool_name: name, content: result });
+          options.onToolEvent?.(name, fn.arguments, result);
+          continue;
+        }
         const extTool = sshTools.find((t) => t.name === name) ?? connectorTools().find((t) => t.name === name) ?? appTools(null).find((t) => t.name === name);
         if (extTool) {
           // approval cards are streamed while the tool works (ssh_connect may ask twice: connect, then the host key)

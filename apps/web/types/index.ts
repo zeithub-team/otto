@@ -69,7 +69,7 @@ export interface Chat {
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'system' | 'activity' | 'thinking' | 'approval';
+  role: 'user' | 'assistant' | 'system' | 'activity' | 'thinking' | 'approval' | 'question';
   content: string;
   timestamp: number;
   projectId?: number;
@@ -88,7 +88,12 @@ export interface ChatMessage {
   approvalId?: string;
   command?: string;
   cwd?: string;
-  status?: 'pending' | 'allowed' | 'denied';
+  status?: 'pending' | 'allowed' | 'denied' | 'answered' | 'skipped';
+  /** For role 'question' (ask_user): the options the model offered and the user's pick. */
+  questionId?: string;
+  question?: string;
+  options?: string[];
+  answer?: string;
   /** A system message that offers an action (e.g. 'claude_cli_login'). */
   action?: string;
 }

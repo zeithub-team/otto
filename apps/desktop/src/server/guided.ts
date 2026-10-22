@@ -19,7 +19,7 @@ const GROUPS: Record<string, string[]> = {
   services: ['otto_docker', 'run_command'],
   ssh: ['ssh_connect', 'ssh_sessions', 'ssh_exec', 'ssh_list', 'ssh_read_file', 'ssh_write_file', 'ssh_disconnect'],
   run: ['run_command', 'otto_preview', 'otto_docker', 'list_files', 'read_file'],
-  code: ['list_files', 'read_file', 'search_files', 'replace_in_file', 'write_file', 'append_file', 'delete_file', 'otto_preview', 'use_skill', 'read_skill_file'],
+  code: ['list_files', 'read_file', 'search_files', 'replace_in_file', 'write_file', 'append_file', 'delete_file', 'otto_preview', 'use_skill', 'read_skill_file', 'ask_user'],
   read: ['list_files', 'read_file', 'search_files'],
   // only offered while the chat's Web switch is on (the tool list itself is filtered by it)
   web: ['web_search', 'fetch_url'],
@@ -59,6 +59,7 @@ export function pickGuidedTools(prompt: string, available: string[]): string[] {
 const SHORT: Record<string, string> = {
   list_files: 'list files of a project folder. args: {path: "" for the root}',
   read_file: 'read a text file. args: {path}',
+  ask_user: 'only when the request is truly ambiguous: ask the user to pick one option (shown as buttons). args: {question, options: [2-4 short options]}',
   search_files: 'find text in the project files. args: {query}',
   write_file: 'create or overwrite a file with the WHOLE content (code goes here, never into the answer). args: {path, content}',
   replace_in_file: 'change part of a file: the text `find` (copied exactly from read_file) becomes `replace`; the rest stays. Best for small edits. args: {path, find, replace}',
