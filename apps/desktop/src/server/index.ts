@@ -12,6 +12,7 @@
  */
 import { configureAppTools } from './apptools';
 import { configureConnectors, stopAllConnectors } from './connectors';
+import { configureHarness } from './harness';
 import { handleBridge } from './agentbridge';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -219,6 +220,7 @@ export async function startServer(opts: StartServerOptions = {}): Promise<Runnin
   configureCodex({ dataDir: path.dirname(dbPath) });
   configureAppTools({ dataDir: path.dirname(dbPath) });
   configureConnectors({ dataDir: path.dirname(dbPath) });
+  configureHarness({ dataDir: path.dirname(dbPath) });
   migrateLegacyOpencodeKey(db);
   const deps = createDeps(db, usableRoot, path.dirname(dbPath));
   const permissionClients = new Set<(item: { id: string; kind: string; action: string; target?: string }) => void>();

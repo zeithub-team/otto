@@ -14,6 +14,7 @@ import * as path from 'node:path';
 import { configureAppSettings } from '../appconfig';
 import { configureProviders } from '../providers';
 import { generateResponse } from '../ollama';
+import type { HarnessProfile } from '../harness';
 import { SCENARIOS, materialize, tampered, type Scenario } from './scenarios';
 
 export interface RunMetrics {
@@ -36,6 +37,8 @@ export interface RunMetrics {
   switchedTo: string[];
   /** The model never answered (rate limit, provider down): not a verdict on the model. */
   infra: boolean;
+  /** What happened, for the harness editor: tool calls (trimmed) and the final answer. */
+  trace: string[];
   error: string;
   ms: number;
 }
@@ -43,12 +46,12 @@ export interface RunMetrics {
 const CLAIM = /(готов|сделан|исправ|проход|выполн|успешн|работает|passed|passing|done|fixed|complete|all tests)/i;
 const TOOL_FAIL = /^(error|ошибка|tool failed|failed|не удалось|exit code: [1-9])|exit code: [1-9]|\bENOENT\b|SyntaxError/i;
 
-export async function runOnce(s: Scenario, model: string, rep: number, keepDir = false): Promise<RunMetrics> {
+export async function runOnce(s: Scenario, model: string, rep: number, keepDir = false, harness?: HarnessProfile | null): Promise<RunMetrics> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), `otto-bench-${s.id}-`));
   materialize(s, root);
   const m: RunMetrics = {
     scenario: s.id, steps: s.steps, model, rep, ok: false, detail: '', falseClaim: false, tamperedTests: [],
-    modelRequests: 0, toolCalls: 0, duplicateCalls: 0, failedTools: 0, peakContext: 0, switchedTo: [], infra: false, error: '', ms: 0,
+    modelRequests: 0, toolCalls: 0, duplicateCalls: 0, failedTools: 0, peakContext: 0, switchedTo: [], infra: false, trace: [], error: '', ms: 0,
   };
   const seen = new Set<string>();
   let answer = '';
@@ -63,6 +66,7 @@ export async function runOnce(s: Scenario, model: string, rep: number, keepDir =
       useTools: true,
       useWeb: false,
       interactive: false,
+      ...(harness !== undefined ? { harness } : {}),
       onUsage: (u) => { m.modelRequests++; m.peakContext = Math.max(m.peakContext, u.used); },
       onModelSwitch: (to) => { m.switchedTo.push(to); },
       onToolEvent: (name, args, result) => {
@@ -71,6 +75,7 @@ export async function runOnce(s: Scenario, model: string, rep: number, keepDir =
         if (seen.has(sig)) m.duplicateCalls++;
         seen.add(sig);
         if (TOOL_FAIL.test(String(result).trim().slice(0, 400))) m.failedTools++;
+        m.trace.push(`${name}(${JSON.stringify(args).slice(0, 160)}) → ${String(result).replace(/s+/g, ' ').slice(0, 220)}`);
       },
     })) {
       let c: Record<string, unknown>;
@@ -82,6 +87,7 @@ export async function runOnce(s: Scenario, model: string, rep: number, keepDir =
     m.error = exc instanceof Error ? exc.message : String(exc);
   }
   m.ms = Date.now() - t0;
+  m.trace.push(`FINAL ANSWER: ${answer.replace(/s+/g, ' ').slice(0, 300)}`);
   const v = s.verify(root, answer);
   m.tamperedTests = tampered(s, root);
   m.ok = v.ok && m.tamperedTests.length === 0;
@@ -93,11 +99,11 @@ export async function runOnce(s: Scenario, model: string, rep: number, keepDir =
 }
 
 /** A run where the model never answered is retried after a pause (free models are often rate-limited upstream). */
-export async function runOne(s: Scenario, model: string, rep: number, keepDir = false): Promise<RunMetrics> {
-  let r = await runOnce(s, model, rep, keepDir);
+export async function runOne(s: Scenario, model: string, rep: number, keepDir = false, harness?: HarnessProfile | null): Promise<RunMetrics> {
+  let r = await runOnce(s, model, rep, keepDir, harness);
   for (let i = 0; i < 3 && r.modelRequests === 0; i++) {
     await new Promise((res) => setTimeout(res, 45_000));
-    r = await runOnce(s, model, rep, keepDir);
+    r = await runOnce(s, model, rep, keepDir, harness);
   }
   r.infra = r.modelRequests === 0;
   return r;

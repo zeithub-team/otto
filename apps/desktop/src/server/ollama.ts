@@ -13,6 +13,7 @@ import { refreshProcessPath } from './env';
 import { languageRule, notice } from './language';
 import { asFunctionTool, openBridge, sshTools, type AgentTool, type Approve } from './agentbridge';
 import { connectorTools, connectorsNote } from './connectors';
+import { applyToolGuidance, getProfile, profileSystemText, type HarnessProfile } from './harness';
 import { appTools, localServerUrl, OTTO_GUIDE, routeAppCommand, wantsPreview, type AppToolContext } from './apptools';
 import { guidedSchema, guidedSystemPrompt, parseGuided, pickGuidedTools, toGuidedMessages, type ToolSpec } from './guided';
 import { inspectPage } from './visualqa';
@@ -281,6 +282,8 @@ export interface GenerateResponseOptions {
   guardWrite?: (tool: string, path: string) => string | null;
   /** A person is watching (the chat): `run_command` may ask them; otherwise only auto mode runs commands. */
   interactive?: boolean;
+  /** Harness profile to use instead of the saved one for this model (tuner probes, tests). */
+  harness?: HarnessProfile | null;
 }
 
 /** Raised for transport problems (mirrors `httpx.HTTPError`). */
@@ -2122,6 +2125,9 @@ ${webRules}Порядок работы:
   systemContent += '\n\n' + languageRule(options.prompt, earlierUserMessages);
   if (toolsEnabled) systemContent += skillsPrompt(enabledSkills(root, profileKey(options.projectId, options.model)), options.prompt);
   if (toolsEnabled) systemContent += '\n\n' + OTTO_GUIDE;
+  // per-model harness profile (harness.ts): tuned prompt additions and tool guidance
+  const profile = options.harness !== undefined ? options.harness : getProfile(String(options.model ?? ''));
+  if (toolsEnabled && profileSystemText(profile)) systemContent += '\n\n' + profileSystemText(profile);
   if (toolsEnabled && connectorsNote()) systemContent += '\n\n' + connectorsNote();
   if (options.extraSystem) systemContent +='\n\n' + options.extraSystem;
   const messages: Message[] = [
@@ -2138,7 +2144,7 @@ ${webRules}Порядок работы:
       messages[0].content += '\n\nСтруктура проекта (для ориентира, не полная):\n' + tree;
     }
   }
-  const toolSpecs = workspaceTools(webOn);
+  const toolSpecs = applyToolGuidance(workspaceTools(webOn), profile);
 
   // Guided mode for local models (guided.ts): one JSON action per turn, constrained by a schema, with
   // only the tools this request needs and a short prompt. Works for models without the tools API too.
@@ -2160,7 +2166,7 @@ ${webRules}Порядок работы:
     const tree = treeAt >= 0 ? head.slice(treeAt) : '';
     // (a big design kit in the prompt made small models forget the task; Otto styles bare pages itself instead)
     const kit = '';
-    messages[0].content = guidedSystemPrompt(specs, [kit, languageRule(options.prompt, earlierUserMessages), connectorsNote(), options.extraSystem ?? '', tree].filter(Boolean).join('\n\n'));
+    messages[0].content = guidedSystemPrompt(specs, [kit, languageRule(options.prompt, earlierUserMessages), connectorsNote(), profileSystemText(profile), options.extraSystem ?? '', tree].filter(Boolean).join('\n\n'));
   }
 
   // Planner + coder (planner.ts): a light "architect" model plans the work, the chat's model only builds it.
