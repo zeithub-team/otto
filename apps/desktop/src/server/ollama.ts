@@ -481,7 +481,20 @@ function dockerComposePlan(command: string): DockerPlan | null {
   }
 }
 
-export async function callOttoDocker(projectId: number | null, action: OttoDockerAction, service?: string): Promise<string> {
+export /** Otto's Docker action; when Docker Desktop is not running it is started and the action runs once more. */
+async function callOttoDocker(projectId: number | null, action: OttoDockerAction, service?: string): Promise<string> {
+  const first = await callOttoDockerOnce(projectId, action, service);
+  const env = await import('./env');
+  if (!env.DOCKER_DOWN.test(first)) return first;
+  const up = await env.ensureDockerRunning();
+  if (!up.ok) return `${first}
+
+[${up.message}]`;
+  return `[${up.message} The action was run again.]
+${await callOttoDockerOnce(projectId, action, service)}`;
+}
+
+async function callOttoDockerOnce(projectId: number | null, action: OttoDockerAction, service?: string): Promise<string> {
   const base = process.env.OTTO_INTERNAL_API_URL;
   if (!base) return 'Otto local Services API is unavailable. Restart Otto and try again.';
   try {
@@ -872,13 +885,20 @@ async function postChat(payload: unknown, signal?: AbortSignal): Promise<Respons
     // No header/body timeouts: reading a long prompt on a partly CPU-offloaded
     // model can take minutes before the first byte, and Node's default 5 min
     // limit aborted such requests with "terminated".
-    return (await undiciFetch(`${baseUrl()}/api/chat`, {
+    const send = async () => (await undiciFetch(`${baseUrl()}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       dispatcher: patientAgent,
       signal,
     })) as unknown as Response;
+    try {
+      return await send();
+    } catch (exc) {
+      // Ollama is installed but not running: start it and try once more
+      if (signal?.aborted || !(await (await import('./env')).ensureOllamaRunning(baseUrl()))) throw exc;
+      return await send();
+    }
   } catch (exc) {
     throw new OllamaConnectionError(errorMessage(exc));
   }

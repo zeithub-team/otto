@@ -573,3 +573,34 @@ function brewInstall(res: http.ServerResponse, toolId: string, action: InstallAc
   child.on('error', (exc) => { send({ line: exc.message }); finish(1); });
   child.on('close', (code) => finish(code ?? 1));
 }
+
+// ------------------------------------------------------------- auto start --
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** The Docker CLI cannot reach the engine (Docker Desktop not running). */
+export const DOCKER_DOWN = /cannot connect to the docker daemon|docker_engine|error during connect|is the docker daemon running|docker desktop is not running|dockerDesktopLinuxEngine/i;
+
+/** Start Docker Desktop and wait until `docker info` answers (up to ~2 min). */
+export async function ensureDockerRunning(): Promise<{ ok: boolean; message: string }> {
+  const docker = dockerCliPath() ?? 'docker';
+  const ready = () => spawnSync(docker, ['info', '--format', '{{.ServerVersion}}'], { encoding: 'utf8', timeout: 10_000, windowsHide: true }).status === 0;
+  if (ready()) return { ok: true, message: 'Docker is running.' };
+  const start = startDockerDesktop();
+  if (!start.started) return { ok: false, message: start.message ?? 'Docker Desktop could not be started.' };
+  for (let i = 0; i < 40; i++) { await sleep(3000); if (ready()) return { ok: true, message: 'Otto started Docker Desktop.' }; }
+  return { ok: false, message: 'Otto started Docker Desktop, but the engine is not ready yet (2 min). Wait a little and retry.' };
+}
+
+/** Start `ollama serve` when the local Ollama does not answer; resolves true once /api/tags responds. */
+export async function ensureOllamaRunning(baseUrl: string): Promise<boolean> {
+  // only the standard local Ollama (`ollama serve` listens on 11434); another address is the user's own setup
+  if (!/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\]):11434$/i.test(baseUrl.replace(/\/+$/, ''))) return false;
+  const up = async () => { try { return (await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(2000) })).ok; } catch { return false; } };
+  if (await up()) return true;
+  const exe = [process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Ollama', 'ollama.exe') : '', '/usr/local/bin/ollama', '/opt/homebrew/bin/ollama']
+    .find((p) => p && fs.existsSync(p)) ?? 'ollama';
+  try { spawn(exe, ['serve'], { detached: true, stdio: 'ignore', windowsHide: true }).unref(); } catch { return false; }
+  for (let i = 0; i < 20; i++) { await sleep(1000); if (await up()) return true; }
+  return false;
+}

@@ -116,7 +116,23 @@ function shellFor(command: string): { file: string; args: string[] } {
 
 /** Run one command; scaffolders into a non-empty folder get the room they need (scaffold.ts). */
 export function runCommand(cwd: string, command: string, timeoutSeconds = DEFAULT_TIMEOUT_S, signal?: AbortSignal): Promise<CommandResult> {
-  return withScaffoldRoom(cwd, command, () => runRaw(cwd, command, timeoutSeconds, signal));
+  return withScaffoldRoom(cwd, command, async () => {
+    const first = await runRaw(cwd, command, timeoutSeconds, signal);
+    // Docker Desktop not running: start it, wait for the engine and run the command once more
+    if (first.code !== 0 && /docker/i.test(command)) {
+      const env = await import('./env');
+      if (env.DOCKER_DOWN.test(first.output)) {
+        const up = await env.ensureDockerRunning();
+        if (!up.ok) return { ...first, output: `${first.output}
+
+[${up.message}]` };
+        const again = await runRaw(cwd, command, timeoutSeconds, signal);
+        return { ...again, output: `[${up.message} The command was run again.]
+${again.output}` };
+      }
+    }
+    return first;
+  });
 }
 
 function runRaw(cwd: string, command: string, timeoutSeconds = DEFAULT_TIMEOUT_S, signal?: AbortSignal): Promise<CommandResult> {
