@@ -7,7 +7,7 @@
 import { randomUUID } from 'crypto';
 import type { Db } from './db';
 import { generateResponse } from './ollama';
-import { parseStep } from './steps';
+import { parseStep, stepDetail } from './steps';
 import { isDirectory, resolvePath } from './paths';
 
 export type AgentStatus = 'running' | 'done' | 'error' | 'stopped';
@@ -167,7 +167,7 @@ export function startAgent(
         const parent = deps.db.createTask(opts.projectId, title, '', 'agent');
         for (const raw of steps) {
           const step = parseStep(raw);
-          deps.db.createTask(opts.projectId, step.title, '', 'agent', parent.id, step.parallel);
+          deps.db.createTask(opts.projectId, step.title, stepDetail(step), 'agent', parent.id, step.parallel);
         }
       } catch (exc) {
         console.log(`[tasks] agent plan_task failed: ${String(exc)}`);

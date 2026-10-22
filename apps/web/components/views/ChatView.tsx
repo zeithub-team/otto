@@ -21,6 +21,8 @@ interface ChatViewProps {
   runStats?: { startedAt: number; tokens: number } | null;
   /** How the last run ended (shown under the messages when nothing is running). */
   lastRun?: RunSummary | null;
+  /** The open project (the changes card undoes a run in it). */
+  projectId?: number;
 }
 
 const ACTIVITY_VERBS: Record<string, string> = {
@@ -219,7 +221,7 @@ function UserText({ content }: { content: string }) {
   );
 }
 
-export function ChatView({ messages, isProcessing, onSelectSuggestion, onRegenerate, runStats, lastRun }: ChatViewProps) {
+export function ChatView({ messages, isProcessing, onSelectSuggestion, onRegenerate, runStats, lastRun, projectId }: ChatViewProps) {
   const { t } = useT();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -515,9 +517,9 @@ export function ChatView({ messages, isProcessing, onSelectSuggestion, onRegener
                     </div>
                   )}
                   {msg.role === 'assistant' && (() => {
-                    const { files } = parseChanges(msg.content || '');
+                    const { files, run } = parseChanges(msg.content || '');
                     return files.length > 0 ? (
-                      <ChangesCard files={files} onPreview={(file) => window.dispatchEvent(new CustomEvent('otto:preview-file', { detail: { path: file } }))} />
+                      <ChangesCard files={files} run={run} projectId={msg.projectId ?? projectId} onPreview={(file) => window.dispatchEvent(new CustomEvent('otto:preview-file', { detail: { path: file } }))} />
                     ) : null;
                   })()}
                   {/* Attached images */}

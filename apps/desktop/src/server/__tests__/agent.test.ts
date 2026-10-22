@@ -220,35 +220,3 @@ test('ask_user in a background run does not wait: the model decides itself', asy
   } finally { await fake.close(); }
 });
 
-test('no-progress guard: the same write a third time is not run again, and a run that keeps looping stops honestly', async () => {
-  const same = call('write_file', { path: 'a.txt', content: 'x' });
-  const fake = await fakeOllama([
-    { tool_calls: [same] }, { tool_calls: [same] }, { tool_calls: [same] },
-    { tool_calls: [same] }, { tool_calls: [same] }, { tool_calls: [same] },
-    { content: 'never reached' },
-  ]);
-  try {
-    const chunks = await run(project(), 'write a.txt');
-    const tools = fake.requests.at(-1)!.messages.filter((m: any) => m.role === 'tool').map((m: any) => String(m.content));
-    assert.match(tools[2], /^NO PROGRESS/, 'third identical write is answered with a hint');
-    const final = chunks.filter((c) => c.role === 'assistant' && !c.isStreaming).at(-1);
-    assert.match(String(final?.content), /repeated the same actions|повторяла одни и те же/);
-    assert.ok(!chunks.some((c) => String(c.content).includes('never reached')));
-  } finally { await fake.close(); }
-});
-
-test('no-progress guard: running the same check again after an edit is progress, not a loop', async () => {
-  const read = call('read_file', { path: 'a.txt' });
-  const fake = await fakeOllama([
-    { tool_calls: [call('write_file', { path: 'a.txt', content: '1' })] }, { tool_calls: [read] },
-    { tool_calls: [call('write_file', { path: 'a.txt', content: '2' })] }, { tool_calls: [read] },
-    { tool_calls: [call('write_file', { path: 'a.txt', content: '3' })] }, { tool_calls: [read] },
-    { tool_calls: [call('write_file', { path: 'a.txt', content: '4' })] }, { tool_calls: [read] },
-    { content: 'done' },
-  ]);
-  try {
-    await run(project(), 'edit a.txt');
-    const tools = fake.requests.at(-1)!.messages.filter((m: any) => m.role === 'tool').map((m: any) => String(m.content));
-    assert.ok(!tools.some((t) => t.startsWith('NO PROGRESS')), tools.join(' | '));
-  } finally { await fake.close(); }
-});

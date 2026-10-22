@@ -464,6 +464,7 @@ function AppShell() {
                   onRegenerate={regenerate}
                   runStats={runStats}
                   lastRun={lastRun}
+                  projectId={selectedProject?.id}
                 />
               )}
               {currentView === 'project' && selectedProject && (

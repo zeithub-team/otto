@@ -5,7 +5,7 @@ import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import type { AddressInfo } from 'net';
-import { detectLanguage, languageRule } from '../language';
+import { detectLanguage, languageRule, notice } from '../language';
 import { generateResponse } from '../ollama';
 
 test('detectLanguage: scripts and Latin languages', () => {
@@ -60,4 +60,10 @@ test('system notices follow the language of the message', async () => {
   assert.match(notice('noProject', 'Crea una pagina con il modulo per favore'), /Seleziona/);
   assert.match(notice('switched', 'Make a page', { from: 'a/b', model: 'x/y' }), /^🔄 Model switch: a\/b → x\/y$/);
   assert.match(notice('emptyAnswer', ''), /Модель не вернула/); // nothing to detect: the old Russian default
+});
+
+test('technical Russian full of file names and commands is still Russian', () => {
+  const step = 'Выполни ТОЛЬКО этап 22 из 28: «[Фронтенд] Корзина: src/public/cart.html, cart.js, POST /api/orders, CartService, OrdersController» — проверка: npx tsc --noEmit && npm run build; файлы src/cart/cart.service.ts src/orders/orders.controller.ts';
+  assert.equal(detectLanguage(step)?.code, 'ru');
+  assert.match(notice('loopGuard', step), /[а-я]/i);
 });

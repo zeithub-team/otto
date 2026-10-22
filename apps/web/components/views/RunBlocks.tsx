@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Brain, ChevronRight, FilePlus2, FileEdit, FileX2, MonitorSmartphone } from 'lucide-react';
+import { Brain, ChevronRight, FilePlus2, FileEdit, FileX2, MonitorSmartphone, Undo2 } from 'lucide-react';
+import { undoRun } from '../../lib/api';
 import { LogoMark } from '../brand/Logo';
 import { useT } from '../../lib/i18n';
 
@@ -14,13 +15,17 @@ export interface FileChange {
 
 const MARKER = /\n*:::changes\n([\s\S]*?)\n:::\s*$/;
 
-/** Split an assistant message into its text and the "files changed" card the agent appended. */
-export function parseChanges(content: string): { text: string; files: FileChange[] } {
+/**
+ * Split an assistant message into its text and the "files changed" card the agent appended.
+ * `run` names the checkpoint the run can be undone with (older answers have none).
+ */
+export function parseChanges(content: string): { text: string; files: FileChange[]; run?: string } {
   const match = MARKER.exec(content);
   if (!match) return { text: content, files: [] };
   try {
-    const files = JSON.parse(match[1]) as FileChange[];
-    if (Array.isArray(files)) return { text: content.slice(0, match.index), files };
+    const data = JSON.parse(match[1]) as FileChange[] | { run?: string; files?: FileChange[] };
+    if (Array.isArray(data)) return { text: content.slice(0, match.index), files: data };
+    if (data && Array.isArray(data.files)) return { text: content.slice(0, match.index), files: data.files, run: typeof data.run === 'string' ? data.run : undefined };
   } catch {
     /* half-streamed or damaged card: show the text as it is */
   }
@@ -62,9 +67,26 @@ const ACTION_STYLE = {
 } as const;
 
 /** The end-of-run summary: which files were created, changed or deleted, with line counts. */
-export function ChangesCard({ files, onPreview }: { files: FileChange[]; onPreview?: (path: string) => void }) {
+export function ChangesCard({ files, onPreview, run, projectId }: { files: FileChange[]; onPreview?: (path: string) => void; run?: string; projectId?: number }) {
   const { t } = useT();
   const [open, setOpen] = useState(true);
+  // undo: 'idle' → 'ask' (confirm) → 'busy' → 'done' | an error text
+  const [undo, setUndo] = useState<'idle' | 'ask' | 'busy' | 'done' | { error: string }>('idle');
+  const [undone, setUndone] = useState(0);
+  const canUndo = Boolean(run && projectId);
+  const doUndo = async () => {
+    if (!run || !projectId) return;
+    setUndo('busy');
+    try {
+      const r = await undoRun(projectId, run);
+      setUndone(r.restored.length + r.removed.length);
+      setUndo('done');
+      window.dispatchEvent(new CustomEvent('otto:files-changed', { detail: { projectId } }));
+      window.dispatchEvent(new CustomEvent('otto:preview-refresh'));
+    } catch (exc) {
+      setUndo({ error: exc instanceof Error ? exc.message : String(exc) });
+    }
+  };
   const added = files.reduce((n, f) => n + f.added, 0);
   const removed = files.reduce((n, f) => n + f.removed, 0);
   return (
@@ -118,6 +140,43 @@ export function ChangesCard({ files, onPreview }: { files: FileChange[]; onPrevi
             );
           })}
         </ul>
+      )}
+      {canUndo && (
+        <div className="flex items-center gap-2 border-t border-[var(--border-color)] px-3 py-1.5 text-xs">
+          {undo === 'idle' && (
+            <button
+              type="button"
+              onClick={() => setUndo('ask')}
+              className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+            >
+              <Undo2 size={12} />
+              {t('chg.undo')}
+            </button>
+          )}
+          {(undo === 'ask' || undo === 'busy') && (
+            <>
+              <span className="text-[var(--text-secondary)]">{t('chg.undoAsk')}</span>
+              <button
+                type="button"
+                disabled={undo === 'busy'}
+                onClick={doUndo}
+                className="ml-auto shrink-0 rounded px-2 py-0.5 font-medium text-[var(--error,#ef4444)] transition-colors hover:bg-[var(--bg-hover)] disabled:opacity-50"
+              >
+                {t('chg.undoYes')}
+              </button>
+              <button
+                type="button"
+                disabled={undo === 'busy'}
+                onClick={() => setUndo('idle')}
+                className="shrink-0 rounded px-2 py-0.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] disabled:opacity-50"
+              >
+                {t('common.cancel')}
+              </button>
+            </>
+          )}
+          {undo === 'done' && <span className="text-[var(--success,#10b981)]">{t('chg.undone', { n: undone })}</span>}
+          {typeof undo === 'object' && <span className="text-[var(--error,#ef4444)]">{t('chg.undoFailed', { e: undo.error })}</span>}
+        </div>
       )}
     </div>
   );

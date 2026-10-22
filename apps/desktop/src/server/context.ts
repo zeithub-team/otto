@@ -48,11 +48,67 @@ export const readLimitChars = (ctxTokens: number): number => Math.max(6000, Math
 
 const STUB_AFTER = 700;
 
+/** Exit code of a run_command result ("(exit code 1, 2.3 s)"); null when it did not finish normally. */
+export function commandExitCode(result: string): number | null {
+  const m = /^\(exit code (-?\d+)/m.exec(result);
+  return m ? Number(m[1]) : null;
+}
+
+const CHECK_KINDS = /\b(test|phpunit|pest|jest|vitest|pytest|build|tsc|lint|eslint|migrate|check)\b/gi;
+
+/**
+ * Does a passing `next` prove the failed `failed` check fixed? Only the same command or one of the same
+ * kind (tests after tests) — `artisan key:generate` passing says nothing about `artisan test`.
+ */
+export function sameCheck(failed: string, next: string): boolean {
+  const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+  if (norm(failed) === norm(next)) return true;
+  const kinds = (s: string) => new Set((s.match(CHECK_KINDS) ?? []).map((k) => k.toLowerCase()));
+  const a = kinds(failed);
+  return [...kinds(next)].some((k) => a.has(k));
+}
+
+/**
+ * The run's state as Otto knows it from the tools (not from what the model says): the task, the files
+ * really changed and a command that is still failing. Re-sent after old results were compacted away.
+ */
+export function taskStateNote(
+  prompt: string,
+  changed: Array<{ path: string; action: string }>,
+  failing: { command: string; output: string } | null,
+): string {
+  const lines = [`[Состояние задачи — от Otto, по результатам инструментов]`, `Задача: ${prompt.trim().slice(0, 600)}`];
+  if (changed.length) lines.push(`Уже изменено (${changed.length}): ${changed.slice(0, 40).map((c) => `${c.path} (${c.action})`).join(', ')}`);
+  else lines.push('Файлы ещё не менялись.');
+  if (failing) lines.push(`Последняя проверка НЕ прошла: \`${failing.command}\`\n${failing.output.slice(-800)}`);
+  lines.push('Старые результаты сокращены: прежде чем править файл, прочитай его заново.');
+  return lines.join('\n');
+}
+
+/** Extract the key information from a tool result before stubbing it: file path, status, errors. */
+function toolResultStub(content: string, toolName: string | undefined): string {
+  const tool = toolName ?? 'инструмент';
+  const len = content.length;
+  // Preserve the first line (usually a status like "File overwritten: x.ts (500 bytes)" or an error)
+  const firstLine = content.split('\n')[0].trim().slice(0, 200);
+  // Preserve error lines
+  const errors = content.split('\n').filter((l) => /error|ошибка|failed|REJECTED|not found/i.test(l)).slice(0, 3).map((l) => l.trim().slice(0, 150));
+  const errorNote = errors.length ? `\nОшибки: ${errors.join('; ')}` : '';
+  // not "call it again": models re-read whole files in a loop; only the part needed for the edit
+  const again = tool === 'read_file'
+    ? 'уже прочитан; для правки перечитай ТОЛЬКО нужный кусок (read_file с start_line/end_line), не весь файл'
+    : 'повтори, только если без этого не обойтись';
+  return `[результат убран: ${tool}, ${len} симв. — ${firstLine}${errorNote} — ${again}]`;
+}
+
 /**
  * Replace old bulky tool payloads (results and written file bodies) with short
  * stubs. The system prompt, the history and the current task (first user
  * message of this run) plus the last `keepRecent` messages stay intact.
  * Returns how many messages were shrunk.
+ *
+ * Key improvements: stubs now preserve the first line (file path, status) and
+ * any error lines, so the model knows what happened without re-reading.
  */
 export function compactMessages(messages: ChatMessage[], ctxTokens: number, keepRecent = 6, threshold = 0.6): number {
   const total = (): number => messages.reduce((sum, m) => sum + (m.content?.length ?? 0) + JSON.stringify(m.tool_calls ?? '').length, 0);
@@ -63,15 +119,18 @@ export function compactMessages(messages: ChatMessage[], ctxTokens: number, keep
   for (let i = 1; i < limit; i++) {
     const m = messages[i];
     if (m.role === 'tool' && m.content.length > STUB_AFTER && !m.content.startsWith('[результат убран')) {
-      m.content = `[результат убран для экономии контекста: ${m.tool_name ?? 'инструмент'}, ${m.content.length} симв. — вызови снова, если нужно]`;
+      m.content = toolResultStub(m.content, m.tool_name);
       shrunk++;
     } else if (m.role === 'assistant' && m.tool_calls) {
       for (const call of m.tool_calls) {
         const args = call.function?.arguments;
         if (args && typeof args === 'object') {
           const a = args as Record<string, unknown>;
+          // the field is dropped, not replaced: a placeholder text in old calls was copied by models as the
+          // content of their next write_file
           if (typeof a.content === 'string' && a.content.length > STUB_AFTER) {
-            a.content = `[записано ${a.content.length} симв., текст убран для экономии контекста]`;
+            a.omitted_content_chars = a.content.length;
+            delete a.content;
             shrunk++;
           }
         }

@@ -9,7 +9,7 @@
  * Whatever the mode, commands that can wreck the machine are never run (see `dangerReason`).
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
 export type ShellMode = 'ask' | 'auto' | 'off';
@@ -21,7 +21,8 @@ const APPROVAL_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** Commands that are refused in every mode: wiping disks, the system, the user's home, the machine itself. */
 const DANGER: Array<[RegExp, string]> = [
-  [/\b(format(\.com)?|diskpart|mkfs(\.\w+)?|fdisk|bcdedit|cipher\s+\/w)\b/i, 'disk formatting / partitioning'],
+  // the commands, not the words: `docker ps --format`, `Format-Table`, `prettier --format` are harmless
+  [/(?<![-\w.])(format(\.com)?(?=\s+[a-z]:)|diskpart|mkfs(\.\w+)?|fdisk|bcdedit|cipher\s+\/w)\b/i, 'disk formatting / partitioning'],
   [/\brm\s+(-\w*\s+)*-\w*[rR]\w*\s+(-\w+\s+)*(\/|~|\$HOME|\/\*|[A-Za-z]:[\\/]?)(\s|$)/, 'recursive delete of a root or home folder'],
   // the flag may come before or after the path
   [/\bremove-item\b(?=[^|;]*-recurse)[^|;]*\s(["']?)([A-Za-z]:[\\/]?|~|\$env:(userprofile|systemroot|windir)|\$home)\1(\s|$)/i, 'recursive delete of a drive or home folder'],
@@ -94,7 +95,14 @@ export function denyAllPending(): void {
 
 // --------------------------------------------------------------------- running --
 
-export interface CommandResult { code: number | null; output: string; timedOut: boolean; ms: number }
+export interface CommandResult { code: number | null; output: string; timedOut: boolean; ms: number; cancelled?: boolean }
+
+/** Kill a shell and everything it started (on Windows `kill()` stops only powershell, npm/php live on). */
+function killTree(child: ChildProcess): void {
+  if (child.exitCode !== null || !child.pid) return;
+  if (process.platform === 'win32') spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }).on('error', () => child.kill());
+  else child.kill('SIGKILL');
+}
 
 function shellFor(command: string): { file: string; args: string[] } {
   if (process.platform === 'win32') {
@@ -105,27 +113,36 @@ function shellFor(command: string): { file: string; args: string[] } {
   return { file: '/bin/sh', args: ['-c', command] };
 }
 
-export function runCommand(cwd: string, command: string, timeoutSeconds = DEFAULT_TIMEOUT_S): Promise<CommandResult> {
+export function runCommand(cwd: string, command: string, timeoutSeconds = DEFAULT_TIMEOUT_S, signal?: AbortSignal): Promise<CommandResult> {
   const timeout = Math.min(MAX_TIMEOUT_S, Math.max(1, Math.round(timeoutSeconds) || DEFAULT_TIMEOUT_S)) * 1000;
   const started = Date.now();
   return new Promise((resolve) => {
+    if (signal?.aborted) { resolve({ code: null, output: '', timedOut: false, ms: 0, cancelled: true }); return; }
     const { file, args } = shellFor(command);
     let out = '';
     let timedOut = false;
+    let cancelled = false;
     const add = (chunk: Buffer) => { if (out.length < MAX_OUTPUT) out += chunk.toString('utf8'); };
     const child = spawn(file, args, { cwd, env: process.env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     child.stdout.on('data', add);
     child.stderr.on('data', add);
-    const timer = setTimeout(() => { timedOut = true; child.kill(); }, timeout);
-    child.on('error', (err) => { clearTimeout(timer); resolve({ code: null, output: `${out}${err.message}`, timedOut, ms: Date.now() - started }); });
-    child.on('close', (code) => { clearTimeout(timer); resolve({ code, output: out, timedOut, ms: Date.now() - started }); });
+    const timer = setTimeout(() => { timedOut = true; killTree(child); }, timeout);
+    const onAbort = () => { cancelled = true; killTree(child); };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    const done = (code: number | null, extra = '') => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      resolve({ code, output: out + extra, timedOut, ms: Date.now() - started, cancelled });
+    };
+    child.on('error', (err) => done(null, err.message));
+    child.on('close', (code) => done(code));
   });
 }
 
 /** The text the model gets back. */
 export function describeResult(command: string, r: CommandResult): string {
   const body = r.output.length >= MAX_OUTPUT ? `${r.output.slice(0, MAX_OUTPUT)}\n… [output cut at ${MAX_OUTPUT} characters]` : r.output;
-  const status = r.timedOut ? 'stopped: time limit reached' : `exit code ${r.code ?? 'unknown'}`;
+  const status = r.cancelled ? 'cancelled by the user' : r.timedOut ? 'stopped: time limit reached' : `exit code ${r.code ?? 'unknown'}`;
   return `$ ${command}\n(${status}, ${Math.round(r.ms / 100) / 10} s)\n${body.trim() || '(no output)'}`;
 }
 

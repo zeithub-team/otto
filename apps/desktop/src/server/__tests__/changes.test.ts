@@ -103,9 +103,90 @@ test('the final answer carries a changes card; reasoning arrives as a thinking b
     assert.ok(!final.content.includes('<think>'));
     const card = /:::changes\n(.*)\n:::/s.exec(final.content);
     assert.ok(card, 'changes card present');
-    const files = JSON.parse(card![1]);
+    const { run: runId, files } = JSON.parse(card![1]);
     assert.deepEqual(files.map((f: { path: string; action: string }) => [f.path, f.action]), [['new.txt', 'created'], ['old.txt', 'deleted']]);
     assert.equal(files[0].added, 2);
+    // the card can undo the run: the deleted file comes back, the created one goes
+    const { restoreCheckpoint } = await import('../checkpoints');
+    assert.ok(restoreCheckpoint(root, runId));
+    assert.equal(fs.readFileSync(path.join(root, 'old.txt'), 'utf8'), 'a\nb\nc\n');
+    assert.equal(fs.existsSync(path.join(root, 'new.txt')), false);
+  } finally {
+    await ollama.close();
+  }
+});
+
+test('a model reading the same file over and over is stopped early with a plain note', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'otto-loop-'));
+  fs.writeFileSync(path.join(root, 'a.txt'), 'hello\n');
+  let requests = 0;
+  const server = http.createServer((req, res) => {
+    requests++;
+    req.resume();
+    req.on('end', () => {
+      res.writeHead(200, { 'content-type': 'application/x-ndjson' });
+      res.write(JSON.stringify({ message: { role: 'assistant', content: '', tool_calls: [{ function: { name: 'read_file', arguments: { path: 'a.txt' } } }] }, done: false }) + '\n');
+      res.end(JSON.stringify({ message: { role: 'assistant', content: '' }, done: true }) + '\n');
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  process.env.OLLAMA_URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const chunks = await run(root);
+    const final = chunks[chunks.length - 1];
+    assert.equal(final.role, 'assistant');
+    assert.match(final.content, /Otto остановил работу/);
+    // one real read, three refused repeats, one closing request — far below the step limit
+    assert.ok(requests <= 6, `requests: ${requests}`);
+  } finally {
+    await new Promise<void>((r) => server.close(() => r()));
+  }
+});
+
+test('a model that falls into repeating itself is asked again instead of failing the run', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'otto-rep-'));
+  const ollama = await fake([
+    [{ message: { role: 'assistant', content: 'the the the' }, done: false }, { error: 'prediction aborted, token repeat limit reached' }],
+    [{ message: { role: 'assistant', content: 'Готово.' }, done: false }, { message: { role: 'assistant', content: '' }, done: true }],
+  ]);
+  try {
+    const chunks = await run(root);
+    const final = chunks[chunks.length - 1];
+    assert.equal(final.role, 'assistant');
+    assert.match(final.content, /Готово/);
+    assert.ok(!chunks.some((c) => c.isError));
+  } finally {
+    await ollama.close();
+  }
+});
+
+test('a tool call with broken JSON is asked again instead of ending the run', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'otto-badcall-'));
+  const ollama = await fake([
+    [{ error: 'llama-server returned invalid tool call arguments for "read_file": unexpected end of JSON input' }],
+    [{ message: { role: 'assistant', content: 'Готово.' }, done: false }, { message: { role: 'assistant', content: '' }, done: true }],
+  ]);
+  try {
+    const chunks = await run(root);
+    assert.ok(!chunks.some((c) => c.isError), 'no error card');
+    assert.match(chunks[chunks.length - 1].content, /Готово/);
+  } finally {
+    await ollama.close();
+  }
+});
+
+test('an empty answer after tool work asks for the summary instead of showing an error', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'otto-empty-'));
+  fs.writeFileSync(path.join(root, 'a.txt'), 'hi\n');
+  const ollama = await fake([
+    [{ message: { role: 'assistant', content: '', tool_calls: [{ function: { name: 'read_file', arguments: { path: 'a.txt' } } }] }, done: false }, { message: { role: 'assistant', content: '' }, done: true }],
+    [{ message: { role: 'assistant', content: '' }, done: true }],
+    [{ message: { role: 'assistant', content: 'Итог: файл прочитан.' }, done: false }, { message: { role: 'assistant', content: '' }, done: true }],
+  ]);
+  try {
+    const chunks = await run(root);
+    assert.ok(!chunks.some((c) => c.isError));
+    assert.match(chunks[chunks.length - 1].content, /Итог/);
   } finally {
     await ollama.close();
   }

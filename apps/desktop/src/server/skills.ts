@@ -40,6 +40,8 @@ export interface Skill {
   official: boolean;
   /** Folder of the skill: its extra files (scripts, references) are read with `read_skill_file`. */
   dir: string;
+  /** A framework / tool skill (frontmatter `kind: stack`): put into the prompt before general ones. */
+  stack?: boolean;
 }
 
 /** The Anthropic skills shipped with the app (see skills/NOTICE-anthropic-skills.md). */
@@ -143,6 +145,7 @@ export function parseSkill(text: string, fallbackName: string, source: Skill['so
     official: OFFICIAL.has(name) && source === 'builtin',
     vendor: OFFICIAL.has(name) && source === 'builtin' ? 'anthropic' : undefined,
     dir: '',
+    ...(meta.kind === 'stack' ? { stack: true } : {}),
   };
 }
 
@@ -267,13 +270,38 @@ export function matchSkills(skills: Skill[], prompt: string): Skill[] {
   return skills.filter((s) => hits(s) > 0).sort((a, b) => hits(b) - hits(a) || rank(a) - rank(b));
 }
 
-/** How many matching skills are pasted into the prompt; the rest stay one `use_skill` call away. */
+/** How many matching general skills are pasted into the prompt; the rest stay one `use_skill` call away. */
 export const MAX_INJECTED_SKILLS = 2;
+/** Matching stack skills (the frameworks the request names) go in first, up to this many. */
+export const MAX_STACK_SKILLS = 3;
 
-/** System-prompt block: injected bodies + the list of others. */
-export function skillsPrompt(skills: Skill[], prompt: string, hasUseSkill = true): string {
+/**
+ * The skills pasted into the prompt: the frameworks and tools the request names first (NestJS, Laravel, Docker —
+ * they hold the exact imports and commands models get wrong), then general ones up to MAX_INJECTED_SKILLS in all.
+ */
+export function pickSkills(skills: Skill[], prompt: string, focus = ''): Skill[] {
+  const matched = matchSkills(skills, prompt);
+  if (!focus) {
+    const stack = matched.filter((s) => s.stack).slice(0, MAX_STACK_SKILLS);
+    const general = matched.filter((s) => !s.stack).slice(0, Math.max(0, MAX_INJECTED_SKILLS - stack.length));
+    return [...stack, ...general];
+  }
+  // one step of a plan: the project's stack comes from the whole task, but only what this step is about goes in
+  // (2 skills at most — a small model's window is for the step's files)
+  const f = focus.toLowerCase();
+  const hits = (s: Skill): number => s.triggers.filter((t) => f.includes(t)).length;
+  const stack = matched.filter((s) => s.stack);
+  const forStep = [...stack.filter((s) => hits(s) > 0).sort((a, b) => hits(b) - hits(a)), ...matchSkills(skills, focus).filter((s) => !s.stack)];
+  const picked = [...new Set(forStep)].slice(0, 2);
+  // nothing named in the step (e.g. "service for books"): the project's main framework still applies
+  if (!picked.length && stack.length) picked.push(stack.find((s) => !/docker|postgres/.test(s.name)) ?? stack[0]);
+  return picked;
+}
+
+/** System-prompt block: injected bodies + the list of others. `focus`: the plan step being done (see pickSkills). */
+export function skillsPrompt(skills: Skill[], prompt: string, hasUseSkill = true, focus = ''): string {
   if (!skills.length) return '';
-  const matched = matchSkills(skills, prompt).slice(0, MAX_INJECTED_SKILLS);
+  const matched = pickSkills(skills, prompt, focus);
   const rest = skills.filter((s) => !matched.includes(s));
   let out = '';
   for (const s of matched) out += `\n\n=== НАВЫК «${s.name}» (применяй обязательно) ===\n${s.body}\n=== конец навыка ===`;

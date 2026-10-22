@@ -20,7 +20,7 @@ interface ChatBody {
   messages: Array<{ role: string; content: string; images?: string[] }>;
 }
 
-async function fakeOllama(opts: { visionSpec?: string; agentTurns: Array<Record<string, unknown>>; installed?: string[] }) {
+async function fakeOllama(opts: { visionSpec?: string; agentTurns: Array<Record<string, unknown>>; installed?: string[]; caps?: Record<string, string[]>; visionInThinking?: boolean }) {
   const chatRequests: ChatBody[] = [];
   let agentIdx = 0;
   const server = http.createServer((req, res) => {
@@ -32,6 +32,15 @@ async function fakeOllama(opts: { visionSpec?: string; agentTurns: Array<Record<
         res.end(JSON.stringify({ models: (opts.installed ?? []).map((name) => ({ name })) }));
         return;
       }
+      if (req.url === '/api/show' && opts.caps) {
+        const { model, name } = JSON.parse(raw) as { model?: string; name?: string };
+        const caps = opts.caps[String(model ?? name)];
+        if (caps) {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ capabilities: caps }));
+          return;
+        }
+      }
       if (req.url !== '/api/chat') {
         res.writeHead(404).end();
         return;
@@ -40,7 +49,7 @@ async function fakeOllama(opts: { visionSpec?: string; agentTurns: Array<Record<
       chatRequests.push(body);
       if (body.stream === false) {
         res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ message: { role: 'assistant', content: opts.visionSpec ?? '' }, done: true }));
+        res.end(JSON.stringify({ message: { role: 'assistant', content: opts.visionInThinking ? '' : opts.visionSpec ?? '', thinking: opts.visionInThinking ? opts.visionSpec : undefined }, done: true }));
         return;
       }
       const turn = opts.agentTurns[Math.min(agentIdx++, opts.agentTurns.length - 1)];
@@ -102,6 +111,35 @@ test('screenshot → the vision model writes a spec, the tool model builds conce
     assert.match(String(chunks[chunks.length - 1].content), /concept\.html/);
   } finally {
     await ollama.close();
+  }
+});
+
+test('a chosen model that sees pictures and calls tools reads the concept and builds it itself', async () => {
+  const root = project();
+  const model = 'hf.co/x/Tiel-Coder-35B-A3B-GGUF:Q4';
+  const ollama = await fakeOllama({
+    visionSpec: 'Кофейня, кнопка «Оформить заказ»',
+    installed: [model],
+    caps: { [model]: ['completion', 'tools', 'vision', 'thinking'] },
+    visionInThinking: true,
+    agentTurns: [
+      { tool_calls: [call('write_file', { path: 'index.html', content: '<!doctype html><button>Оформить заказ</button>' })] },
+      { content: 'ИТОГ: index.html' },
+    ],
+  });
+  try {
+    await run({ prompt: 'собери по концепту', messageId: 'm', projectId: 1, projectPath: project(), images: ['aGVsbG8='], model, useTools: true });
+    const [visionReq, agentReq] = ollama.chatRequests;
+    assert.equal(visionReq.model, model);
+    // a thinking model describes without reasoning, and a description left in `thinking` is still used
+    assert.equal((visionReq as unknown as { think?: unknown }).think, false);
+    assert.match(agentReq.messages.find((m) => m.role === 'user')!.content, /Оформить заказ/);
+    // not the default model (it may not be installed at all)
+    assert.equal(agentReq.model, model);
+    assert.ok(!agentReq.messages.some((m) => m.images?.length));
+  } finally {
+    await ollama.close();
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
