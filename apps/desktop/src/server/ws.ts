@@ -298,8 +298,8 @@ async function handlePrompt(ws: WebSocket | null, messageData: ChatPayload, deps
       const note = JSON.stringify({
         role: 'assistant', id: `chain-${messageId}`, timestamp: Date.now(), projectId, isStreaming: false,
         content: ru
-          ? `🔧 План передан исполнителю${coder.model ? ` (${coder.model})` : ''}: этапы выполняются по очереди — прогресс в панели задач и во вкладке «Агенты».`
-          : `🔧 The plan went to the coder${coder.model ? ` (${coder.model})` : ''}: its stages run one by one — progress in the task panel and the Agents tab.`,
+          ? `План выполняется по этапам${coder.model ? ` · ${coder.model}` : ''}`
+          : `The plan runs stage by stage${coder.model ? ` · ${coder.model}` : ''}`,
       });
       for (const l of viewersOf(chatId)) l(note);
       for (const l of viewersOf(chatId)) l(JSON.stringify({ role: 'ui', action: 'tasks-changed' }));

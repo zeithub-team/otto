@@ -431,6 +431,14 @@ export function ChatView({ messages, isProcessing, onSelectSuggestion, onRegener
               if (msg.role === 'approval') {
                 return <ApprovalCard key={msg.id} msg={msg} />;
               }
+              // the plan was handed to the stages: one quiet line, the progress itself is in the task panel
+              if (msg.id.startsWith('chain-')) {
+                return (
+                  <div key={msg.id} className="flex justify-center">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--accent)]/30 bg-[var(--accent-glow)] px-3 py-1 text-[11px] text-[var(--accent)]">▶ {msg.content}</span>
+                  </div>
+                );
+              }
               if (msg.role === 'question') {
                 return <QuestionCard key={msg.id} msg={msg} />;
               }

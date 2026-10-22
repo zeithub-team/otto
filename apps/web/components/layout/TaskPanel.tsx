@@ -23,6 +23,8 @@ export function TaskPanel({ projectId, collapsed, onToggle }: TaskPanelProps) {
   const [draft, setDraft] = useState('');
   const [doneOpen, setDoneOpen] = useState(false);
   const [open, setOpen] = useState<Record<number, boolean>>({});
+  // finished stages are folded away (the last two stay) unless the user opens them
+  const [showDone, setShowDone] = useState<Record<number, boolean>>({});
   const [stepDraft, setStepDraft] = useState<Record<number, string>>({});
 
   if (collapsed) {
@@ -153,7 +155,11 @@ export function TaskPanel({ projectId, collapsed, onToggle }: TaskPanelProps) {
 
         {expanded && (
           <div className="px-2 pb-2 space-y-0.5">
+            {(() => { const doneCount = steps.filter((x) => x.status === 'done').length; return doneCount > 2 && !showDone[task.id] ? (
+              <button onClick={() => setShowDone((p) => ({ ...p, [task.id]: true }))} className="mb-0.5 flex items-center gap-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--accent)]"><Check size={10} /> {t('tasks.doneSteps', { n: doneCount - 2 })}</button>
+            ) : null; })()}
             {steps.map((step, stepIndex) => {
+              if (step.status === 'done' && !showDone[task.id] && steps.filter((x) => x.status === 'done').length > 2 && steps.filter((x, i) => x.status === 'done' && i > stepIndex).length >= 2) return null;
               const current = running && (run?.stepIds?.includes(step.id) || run?.stepId === step.id);
               const isDone = step.status === 'done';
               return (
@@ -171,9 +177,22 @@ export function TaskPanel({ projectId, collapsed, onToggle }: TaskPanelProps) {
                     {isDone ? <Check size={10} strokeWidth={3} /> : current ? <Loader2 size={9} className="animate-spin text-[var(--accent)]" /> : null}
                   </button>
                   <div className="min-w-0 flex-1">
-                    <div className={`text-[11px] leading-snug ${isDone ? 'line-through text-[var(--text-muted)]' : current ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}>
-                      {step.title}
-                    </div>
+                    {(() => {
+                      // "[Phase] what to do — после: check" → a phase chip, the task, and the check on its own grey line
+                      const m = /^s*[([^]]{1,24})]s*(.*?)(?:s+[—-]s+(?:после|after|check)s*:s*(.+))?$/i.exec(step.title);
+                      const phase = m?.[1] ?? '';
+                      const text = m ? m[2] : step.title;
+                      const check = m?.[3] ?? '';
+                      return (
+                        <>
+                          <div className={`text-[11px] leading-snug ${isDone ? 'text-[var(--text-muted)]' : current ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-secondary)]'}`}>
+                            {phase && <span className="mr-1 rounded bg-[var(--bg-tertiary)] px-1 py-px text-[9px] uppercase tracking-wide text-[var(--text-muted)]">{phase}</span>}
+                            {text}
+                          </div>
+                          {check && !isDone && <div className="mt-0.5 truncate font-mono text-[9px] text-[var(--text-muted)]" title={check}>✓ {check}</div>}
+                        </>
+                      );
+                    })()}
                     {isDone && step.detail && (
                       <div className="text-[9px] text-[var(--text-muted)] line-clamp-2" title={step.detail}>{step.detail}</div>
                     )}

@@ -56,10 +56,19 @@ export function TaskRunBanner({ projectId, onOpenAgents }: { projectId?: number;
               </div>
               {ids.map((id) => {
                 const index = steps.findIndex((s) => s.id === id);
+                // stage name without its "[Phase]" prefix and "— после: check" tail; the live action on its own line
+                const title = index >= 0 ? steps[index].title.replace(/^s*[[^]]{1,24}]s*/, '').replace(/s+[—-]s+(после|after|check)s*:.*$/i, '') : '';
+                const done = steps.filter((s) => s.status === 'done').length;
                 return (
-                  <div key={id} className="truncate text-[11px] text-[var(--text-secondary)]">
-                    {index >= 0 && <span className="text-[var(--text-muted)]">{index + 1}/{steps.length} {steps[index].title} — </span>}
-                    <span className="text-[var(--accent)]">{run.paused ? t('tasks.paused') : activityLine(t, run.activity?.[id], run.startedAt?.[id], now)}</span>
+                  <div key={id} className="mt-0.5">
+                    {index >= 0 && (
+                      <div className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+                        <span className="shrink-0 text-[var(--text-muted)]">{index + 1}/{steps.length}</span>
+                        <span className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-[var(--bg-tertiary)]"><span className="block h-full bg-[var(--accent)]" style={{ width: `${Math.round((done / Math.max(1, steps.length)) * 100)}%` }} /></span>
+                        <span className="truncate">{title}</span>
+                      </div>
+                    )}
+                    <div className="truncate text-[11px] text-[var(--accent)]">{run.paused ? t('tasks.paused') : activityLine(t, run.activity?.[id], run.startedAt?.[id], now)}</div>
                   </div>
                 );
               })}
