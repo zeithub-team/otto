@@ -61,7 +61,7 @@ function systemChunk(content: string): string {
     role: 'system',
     content,
     id: 'local',
-    timestamp: Math.floor(Date.now() / 1000), // Python: int(time.time())
+    timestamp: Date.now(), // milliseconds, like every other chat chunk (the UI shows new Date(ts))
     isError: true,
   });
 }
@@ -218,7 +218,7 @@ async function handlePrompt(ws: WebSocket | null, messageData: ChatPayload, deps
       // Surface tool activity in the chat UI (also drives Files auto-refresh).
       send(JSON.stringify({
         role: 'tool', tool: name, args, result: String(result).slice(0, 400),
-        id: `tool-${randomUUID()}`, timestamp: Math.floor(Date.now() / 1000),
+        id: `tool-${randomUUID()}`, timestamp: Date.now(),
       }));
     },
   });
@@ -296,7 +296,7 @@ async function handlePrompt(ws: WebSocket | null, messageData: ChatPayload, deps
       const coder = roleOrChat('coder', model, chatEffort);
       startTaskRun(deps, planned, coder.model);
       const note = JSON.stringify({
-        role: 'assistant', id: `chain-${messageId}`, timestamp: Math.floor(Date.now() / 1000), projectId, isStreaming: false,
+        role: 'assistant', id: `chain-${messageId}`, timestamp: Date.now(), projectId, isStreaming: false,
         content: ru
           ? `🔧 План передан исполнителю${coder.model ? ` (${coder.model})` : ''}: этапы выполняются по очереди — прогресс в панели задач и во вкладке «Агенты».`
           : `🔧 The plan went to the coder${coder.model ? ` (${coder.model})` : ''}: its stages run one by one — progress in the task panel and the Agents tab.`,
