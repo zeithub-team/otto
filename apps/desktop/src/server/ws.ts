@@ -189,6 +189,9 @@ async function handlePrompt(ws: WebSocket | null, messageData: ChatPayload, deps
     },
     onPlanTask: (title, steps) => {
       try {
+        // a second plan in the same answer replaces the first one (models re-plan; two copies were left on the board)
+        // — unless work on the first plan has already started
+        if (planned !== null && deps.db.listSteps(planned).every((s) => s.status === 'todo')) deps.db.deleteTask(planned);
         const parent = deps.db.createTask(projectId, title, '', 'agent');
         planned = parent.id;
         for (const raw of steps) {
