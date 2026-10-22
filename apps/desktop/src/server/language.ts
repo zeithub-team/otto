@@ -76,7 +76,7 @@ export function languageRule(prompt: string, previousUserMessages: string[] = []
   );
 }
 
-type NoticeKey = 'noProject' | 'noFolder' | 'emptyAnswer' | 'stepLimit' | 'switched' | 'noTools' | 'loopStopped' | 'allLimits';
+type NoticeKey = 'noProject' | 'noFolder' | 'emptyAnswer' | 'stepLimit' | 'switched' | 'noTools' | 'loopStopped' | 'allLimits' | 'stalled';
 
 const NOTICES: Record<string, Record<NoticeKey, string>> = {
   ru: {
@@ -87,6 +87,7 @@ const NOTICES: Record<string, Record<NoticeKey, string>> = {
     switched: '🔄 Смена модели: {from} → {model}',
     loopStopped: 'Готово — изменения ниже.',
     allLimits: '⛔ Лимиты исчерпаны у всех доступных провайдеров ({tried}), а локальной модели нет. Подождите сброса лимитов, добавьте ключ другого провайдера (Настройки → Модели) или скачайте локальную модель в разделе «Модели».',
+    stalled: "⚠️ Остановился: модель несколько раз повторяла одни и те же действия без результата ({what}). Изменения, которые успели сделать, сохранены. Уточните задачу или выберите другую модель.",
     noTools: '⚠️ Модель {model} не поддерживает инструменты: она не может сама записывать файлы, запускать команды и сервисы, открывать превью и управлять Otto. Ответ будет только текстом. Для работы с проектом выберите модель с поддержкой инструментов (например qwen2.5-coder, qwen3-coder, llama3.1 или облачную).',
   },
   en: {
@@ -97,6 +98,7 @@ const NOTICES: Record<string, Record<NoticeKey, string>> = {
     switched: '🔄 Model switch: {from} → {model}',
     loopStopped: 'Done — the changes are below.',
     allLimits: '⛔ The limits ran out at every available provider ({tried}), and there is no local model. Wait for the limits to reset, add another provider\'s key (Settings → Models) or download a local model in Models.',
+    stalled: "⚠️ Stopped: the model repeated the same actions several times without progress ({what}). Changes made so far are kept. Refine the request or pick another model.",
     noTools: '⚠️ The model {model} does not support tools: it cannot write files, run commands or services, open the Preview or operate Otto by itself. It will answer with text only. To work on the project, pick a model with tool support (e.g. qwen2.5-coder, qwen3-coder, llama3.1 or a cloud model).',
   },
   az: {
@@ -107,6 +109,7 @@ const NOTICES: Record<string, Record<NoticeKey, string>> = {
     switched: '🔄 Model dəyişikliyi: {from} → {model}',
     loopStopped: 'Hazırdır — dəyişikliklər aşağıdadır.',
     allLimits: '⛔ Bütün mövcud provayderlərdə limit bitdi ({tried}), lokal model də yoxdur. Limitlərin sıfırlanmasını gözləyin, başqa provayderin açarını əlavə edin (Parametrlər → Modellər) və ya «Modellər» bölməsində lokal model yükləyin.',
+    stalled: "⚠️ Dayandım: model eyni əməliyyatları nəticəsiz bir neçə dəfə təkrarladı ({what}). Edilmiş dəyişikliklər saxlanılıb. Tapşırığı dəqiqləşdirin və ya başqa model seçin.",
     noTools: '⚠️ {model} modeli alətləri dəstəkləmir: faylları yaza, əmrləri və xidmətləri işə sala, önizləməni aça və Otto-nu idarə edə bilmir. Cavab yalnız mətn olacaq. Layihə üzərində işləmək üçün alət dəstəyi olan model seçin (məs. qwen2.5-coder, qwen3-coder, llama3.1 və ya bulud modeli).',
   },
   ka: {
@@ -117,6 +120,7 @@ const NOTICES: Record<string, Record<NoticeKey, string>> = {
     switched: '🔄 მოდელის შეცვლა: {from} → {model}',
     loopStopped: 'მზადაა — ცვლილებები ქვემოთაა.',
     allLimits: '⛔ ლიმიტები ამოიწურა ყველა ხელმისაწვდომ პროვაიდერთან ({tried}), ლოკალური მოდელი კი არ არის. დაელოდეთ ლიმიტების განახლებას, დაამატეთ სხვა პროვაიდერის გასაღები (პარამეტრები → მოდელები) ან ჩამოტვირთეთ ლოკალური მოდელი.',
+    stalled: "⚠️ შევჩერდი: მოდელმა რამდენჯერმე გაიმეორა ერთი და იგივე მოქმედება შედეგის გარეშე ({what}). უკვე გაკეთებული ცვლილებები შენახულია. დააზუსტეთ ამოცანა ან აირჩიეთ სხვა მოდელი.",
     noTools: '⚠️ მოდელი {model} არ უჭერს მხარს ინსტრუმენტებს: ვერ ჩაწერს ფაილებს, ვერ გაუშვებს ბრძანებებს და სერვისებს, ვერ გახსნის პრევიუს და ვერ მართავს Otto-ს. პასუხი მხოლოდ ტექსტი იქნება. პროექტზე სამუშაოდ აირჩიეთ ინსტრუმენტების მხარდაჭერის მქონე მოდელი (მაგ. qwen2.5-coder, qwen3-coder, llama3.1 ან ღრუბლოვანი).',
   },
   it: {
@@ -127,6 +131,7 @@ const NOTICES: Record<string, Record<NoticeKey, string>> = {
     switched: '🔄 Cambio modello: {from} → {model}',
     loopStopped: 'Fatto — le modifiche sono qui sotto.',
     allLimits: '⛔ I limiti sono esauriti presso tutti i provider disponibili ({tried}) e non c\'è un modello locale. Attendi il ripristino, aggiungi la chiave di un altro provider (Impostazioni → Modelli) o scarica un modello locale in Modelli.',
+    stalled: "⚠️ Mi sono fermato: il modello ha ripetuto più volte le stesse azioni senza progressi ({what}). Le modifiche fatte finora restano. Precisa la richiesta o scegli un altro modello.",
     noTools: '⚠️ Il modello {model} non supporta gli strumenti: non può scrivere file, avviare comandi o servizi, aprire l’anteprima né usare Otto da solo. Risponderà solo con testo. Per lavorare sul progetto scegli un modello con strumenti (es. qwen2.5-coder, qwen3-coder, llama3.1 o un modello cloud).',
   },
   es: {
@@ -137,6 +142,7 @@ const NOTICES: Record<string, Record<NoticeKey, string>> = {
     switched: '🔄 Cambio de modelo: {from} → {model}',
     loopStopped: 'Listo — los cambios están abajo.',
     allLimits: '⛔ Se agotaron los límites en todos los proveedores disponibles ({tried}) y no hay modelo local. Espera a que se restablezcan, añade la clave de otro proveedor (Ajustes → Modelos) o descarga un modelo local en Modelos.',
+    stalled: "⚠️ Me detuve: el modelo repitió varias veces las mismas acciones sin avanzar ({what}). Los cambios hechos se conservan. Precisa la petición o elige otro modelo.",
     noTools: '⚠️ El modelo {model} no admite herramientas: no puede escribir archivos, ejecutar comandos o servicios, abrir la vista previa ni manejar Otto por sí mismo. Responderá solo con texto. Para trabajar en el proyecto elige un modelo con herramientas (p. ej. qwen2.5-coder, qwen3-coder, llama3.1 o uno en la nube).',
   },
 };

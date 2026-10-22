@@ -2229,6 +2229,11 @@ ${webRules}Порядок работы:
   let codeNudges = 0;
   // the tool called just before (ask_user may not follow itself)
   let lastToolName = '';
+  // no-progress guard (Phase 13, 17.4): identical calls seen in this run, and how often the guard fired
+  const callCounts = new Map<string, number>();
+  let loopHits = 0;
+  // bumps on every file change: running the tests again after an edit is progress, not a repeat
+  let editVersion = 0;
   // "starting… done" without a single tool call: nothing happened, send the model back once
   let toolCallsTotal = 0;
   let actionNudges = 0;
@@ -2626,6 +2631,28 @@ ${webRules}Порядок работы:
         const actId = `act-${msgId}-${step}-${i}`;
         if (name !== 'run_command') yield activity('tool_start', name, paths, actId);
         let result: string;
+        // The same call with the same arguments again: changing nothing cannot give a new result.
+        // A write or a command repeated 3 times (a read 4 times) is answered with a hint instead of
+        // being executed; when that keeps happening the run stops honestly instead of looping on.
+        const isEdit = /^(write_file|replace_in_file|append_file|delete_file)$/.test(name);
+        const loopSig = `${name}:${isEdit ? '' : editVersion}:${JSON.stringify(Object.fromEntries(Object.entries(argsObj).sort(([a], [b]) => (a < b ? -1 : 1))))}`;
+        const repeats = (callCounts.get(loopSig) ?? 0) + 1;
+        callCounts.set(loopSig, repeats);
+        if (name !== 'ask_user' && repeats >= (READ_ONLY_TOOLS.has(name) ? 4 : 3)) {
+          loopHits++;
+          if (loopHits >= 4) {
+            const what = `${name} ×${repeats}`;
+            yield activity('tool_end', name, paths, actId);
+            yield assistantChunk(((accumulated ? accumulated + '\n\n' : '') + notice('stalled', options.prompt, { what })).trim(), msgId, ts, pid, false, toolsEnabled, changes.marker());
+            return;
+          }
+          result = `NO PROGRESS: this exact ${name} call was already made ${repeats - 1} times with the same arguments, so it was not run again. Repeating it cannot change the result. Do something different: read the last error, change the code, or try another approach. If you are blocked, stop and tell the user what blocks you.`;
+          yield activity('tool_end', name, paths, actId);
+          messages.push({ role: 'tool', tool_name: name, content: result });
+          options.onToolEvent?.(name, fn.arguments, result);
+          continue;
+        }
+        if (isEdit) editVersion++;
         if (name === 'ask_user') {
           const question = String(argsObj.question ?? '').trim().slice(0, 300);
           const opts = (Array.isArray(argsObj.options) ? argsObj.options : typeof argsObj.options === 'string' ? String(argsObj.options).split(/\n|\s*\|\s*/) : [])
