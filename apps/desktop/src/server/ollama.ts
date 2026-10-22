@@ -2132,6 +2132,15 @@ ${webRules}Порядок работы:
           if (!finalText && toolCallsTotal > 0) {
             // still nothing: report the run itself rather than an error card
             const card = changesCard();
+            // never "Done" when the last check failed: say what failed (the model gave no answer of its own)
+            if (failing) {
+              const ru = /[а-яё]/i.test(options.prompt);
+              const head = ru
+                ? `⚠️ Не готово: модель остановилась без ответа, а последняя команда завершилась ошибкой — \`${failing.command}\`:`
+                : `⚠️ Not done: the model stopped without an answer, and the last command failed — \`${failing.command}\`:`;
+              yield assistantChunk(`${head}\n\`\`\`\n${failing.output.trim().slice(-1200)}\n\`\`\`${card}`, msgId, ts, pid, false, toolsEnabled);
+              return;
+            }
             yield assistantChunk(notice(card ? 'loopStopped' : 'emptyAnswer', options.prompt) + card, msgId, ts, pid, false, toolsEnabled);
             return;
           }
@@ -2297,6 +2306,10 @@ ${webRules}Порядок работы:
               } else {
                 const run = await runCommand(root, command, Number(argsObj.timeout_seconds) || undefined, options.signal);
                 result = describeResult(command, run);
+                // Composer refusing versions: usually an old PHP or a pinned old constraint — say how to get out
+                if (/\bcomposer\b/i.test(command) && /security advisor|affected by security|blocked by|requires php|your php version|php \^8\.[2-9]/i.test(run.output)) {
+                  result += '\nHINT: Composer refuses these versions. Check `php -v`: current Laravel needs PHP 8.2+ (8.3/8.4 recommended) — if PHP is older, tell the user to install a newer PHP (Otto: Services → Tools → PHP) or run Composer inside the Docker app container. Do not pin old package versions to get around security advisories.';
+                }
                 const code = commandExitCode(result);
                 if (code !== null && code !== 0) failing = { command, output: run.output };
                 else if (code === 0 && failing && sameCheck(failing.command, command)) failing = null;
