@@ -3,12 +3,16 @@ import { clipboardAction } from './shortcuts';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { randomBytes } from 'crypto';
 import { spawnSync } from 'child_process';
 import { startEmbeddedServer } from './server';
 import { holdCloseForTabby, installTabby } from './tabby';
 import { startUpdateChecks } from './updates';
 
 const isDev = process.argv.includes('--dev');
+
+// session token for the local API (server/session.ts): random per launch, given only to Otto's window
+process.env.OTTO_SESSION_TOKEN ??= randomBytes(24).toString('hex');
 
 // macOS: an app started from the Dock gets a bare PATH (/usr/bin:/bin…), without Homebrew, nvm or
 // ~/.local/bin — node, git, npx, ollama and the Claude/Codex CLIs would not be found. Take the PATH
@@ -173,7 +177,7 @@ function createWindow(): void {
       sandbox: true,
       spellcheck: false,
       // Dev: tells the preload which port the embedded API server uses
-      additionalArguments: [`--otto-api-port=${apiPort}`, `--otto-version=${app.getVersion()}`],
+      additionalArguments: [`--otto-api-port=${apiPort}`, `--otto-version=${app.getVersion()}`, `--otto-token=${process.env.OTTO_SESSION_TOKEN}`],
     },
   });
 

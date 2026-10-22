@@ -14,6 +14,7 @@ import * as ssh from './sshclient';
 import { detectRun, getRun, startRun, stopRun } from './runner';
 import { live } from './appconfig';
 import { serviceSummary } from './servicesummary';
+import { internalHeaders } from './session';
 
 let dataDir = '';
 /** Where SSH keys and known hosts live (set once by index.ts). */
@@ -77,7 +78,7 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : v === undefined
 async function internal(method: string, route: string, body?: unknown): Promise<unknown> {
   const base = process.env.OTTO_INTERNAL_API_URL;
   if (!base) throw new Error('Otto local API is unavailable');
-  const res = await fetch(new URL(route, base), { method, headers: body ? { 'content-type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(new URL(route, base), { method, headers: { ...internalHeaders(), ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const data = await res.json().catch(() => ({})) as Record<string, unknown>;
   if (!res.ok) throw new Error(str(data.detail ?? data.error ?? res.statusText));
   return data;

@@ -26,6 +26,33 @@ export const API_BASE: string =
       ? window.ottoDesktop.apiBase
       : webApiBase();
 
+/**
+ * Desktop session token (server/session.ts): added to every request to Otto's API and to its
+ * WebSockets, wherever in the UI they are made. No token in the plain web build: nothing changes.
+ */
+if (typeof window !== 'undefined' && window.ottoDesktop?.token && !(window as { __ottoTokenPatched?: boolean }).__ottoTokenPatched) {
+  const token = window.ottoDesktop.token;
+  (window as { __ottoTokenPatched?: boolean }).__ottoTokenPatched = true;
+  const apiOrigin = new URL(API_BASE || window.location.origin, window.location.href).origin;
+  const ours = (u: string) => { try { return new URL(u, window.location.href).origin === apiOrigin; } catch { return false; } };
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (!ours(url)) return nativeFetch(input, init);
+    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+    headers.set('x-otto-token', token);
+    return nativeFetch(input, { ...init, headers });
+  };
+  const NativeWS = window.WebSocket;
+  const Patched = function (this: WebSocket, url: string | URL, protocols?: string | string[]) {
+    const u = new URL(String(url), window.location.href);
+    if (u.origin.replace(/^ws/, 'http') === apiOrigin) u.searchParams.set('otto_token', token);
+    return new NativeWS(u.href, protocols);
+  } as unknown as typeof WebSocket;
+  Object.assign(Patched, { prototype: NativeWS.prototype, CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
+  window.WebSocket = Patched;
+}
+
 /** ws(s) origin of the API server: the API_BASE host, or the page origin when same-origin. */
 function socketOrigin(): string {
   const base = API_BASE || window.location.origin;
@@ -272,6 +299,8 @@ export async function startServiceStream(
 /** URL for serving a previewable binary (image) from the project. */
 export function fileRawUrl(projectId: number, filePath: string): string {
   const params = new URLSearchParams({ project_id: String(projectId), path: filePath });
+  // <img> cannot send headers: the desktop session token goes in the query
+  if (typeof window !== 'undefined' && window.ottoDesktop?.token) params.set('otto_token', window.ottoDesktop.token);
   return `${API_BASE}/api/files/raw?${params}`;
 }
 

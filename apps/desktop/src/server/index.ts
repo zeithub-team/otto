@@ -13,6 +13,7 @@
 import { configureAppTools } from './apptools';
 import { configureConnectors, stopAllConnectors } from './connectors';
 import { configureHarness } from './harness';
+import { checkAccess } from './session';
 import { handleBridge } from './agentbridge';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -246,6 +247,15 @@ export async function startServer(opts: StartServerOptions = {}): Promise<Runnin
     });
   });
   const server = http.createServer((req, res) => {
+    // the desktop app's session token (session.ts) guards the API; pages and assets stay open
+    const path0 = (req.url ?? '/').split('?')[0];
+    // /api/site/* is the preview of the project's static files: its pages load css/js/images by relative
+    // links that cannot carry the token, so read-only GETs there are open (the Origin check still applies)
+    const openPreview = req.method === 'GET' && path0.startsWith('/api/site/');
+    if (isApiZone(path0) && path0 !== '/health' && req.method !== 'OPTIONS' && !openPreview) {
+      const denied = checkAccess(req);
+      if (denied) { res.writeHead(403, { 'content-type': 'application/json' }).end(JSON.stringify({ detail: `Forbidden: ${denied}` })); return; }
+    }
     serve(req, res, deps, rendererDir).catch((exc) => {
       console.error('[server] request failed:', exc);
       if (!res.writableEnded) {
@@ -254,7 +264,15 @@ export async function startServer(opts: StartServerOptions = {}): Promise<Runnin
       }
     });
   });
+  // runs before the chat/terminal upgrade handlers: a refused socket is closed and marked
+  server.prependListener('upgrade', (req, socket) => {
+    const denied = checkAccess(req);
+    if (!denied) return;
+    (req as { ottoDenied?: boolean }).ottoDenied = true;
+    socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+  });
   server.on('upgrade', (req, socket, head) => {
+    if ((req as { ottoDenied?: boolean }).ottoDenied) return;
     if ((req.url ?? '').split('?')[0] !== '/api/permissions/ws') return;
     permissionWss.handleUpgrade(req, socket, head, (ws) => permissionWss.emit('connection', ws, req));
   });

@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld('ottoDesktop', {
   isDesktop: true,
   platform: process.platform,
   apiBase: resolveApiBase(),
+  /** Session token for the local API (sent by the UI with every request). */
+  token: (process.argv.find((a) => a.startsWith('--otto-token=')) ?? '').split('=')[1] ?? '',
   /** This build's version (apps/desktop/package.json), passed by the main process. */
   appVersion: (process.argv.find((a) => a.startsWith('--otto-version=')) ?? '').split('=')[1] ?? '',
   /** Open a folder in the OS file manager (resolve on error). */

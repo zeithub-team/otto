@@ -287,6 +287,7 @@ export function attachChatWs(
   });
 
   server.on('upgrade', (req, socket, head) => {
+    if ((req as { ottoDenied?: boolean }).ottoDenied) return; // refused by the session guard (index.ts)
     const pathname = (req.url ?? '').split('?')[0];
     if (pathname !== CHAT_WS_PATH) {
       // Other upgrade routes (e.g. the terminal socket below) have their own
@@ -420,6 +421,7 @@ export function attachTerminalWs(server: http.Server): WebSocketServer {
   });
 
   server.on('upgrade', (req, socket, head) => {
+    if ((req as { ottoDenied?: boolean }).ottoDenied) return; // refused by the session guard (index.ts)
     const pathname = (req.url ?? '').split('?')[0];
     if (pathname !== TERMINAL_WS_PATH) return;
     wss.handleUpgrade(req, socket, head, (ws) => {

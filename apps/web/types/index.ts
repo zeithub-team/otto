@@ -195,6 +195,8 @@ declare global {
       platform: string;
       /** '' = same origin (embedded desktop server) */
       apiBase: string;
+      /** Session token for the local API (desktop build). */
+      token?: string;
       /** This build's version, e.g. '0.1.6'. */
       appVersion?: string;
       /** Reveal a folder in the OS file manager (desktop build only). */

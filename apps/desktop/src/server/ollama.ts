@@ -29,6 +29,7 @@ import { describeResult, dangerReason, normalizeMode, requestApproval, requestCh
 import { describeRateLimit, listAllCloudModels, providerChat, providerForModel } from './providers';
 import * as fs from 'fs';
 import * as path from 'path';
+import { internalHeaders } from './session';
 import {
   errorMessage,
   isDirectory,
@@ -916,7 +917,7 @@ async function callOttoDocker(projectId: number | null, action: OttoDockerAction
     if (projectId !== null) url.searchParams.set('project_id', String(projectId));
     url.searchParams.set('action', action);
     if (service) url.searchParams.set('service', service);
-    const response = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(action === 'runtime-up' ? 900_000 : 300_000) });
+    const response = await fetch(url, { method: 'POST', headers: internalHeaders(), signal: AbortSignal.timeout(action === 'runtime-up' ? 900_000 : 300_000) });
     const contentType = response.headers.get('content-type') ?? '';
     if (contentType.includes('application/x-ndjson')) {
       const text = await response.text();
