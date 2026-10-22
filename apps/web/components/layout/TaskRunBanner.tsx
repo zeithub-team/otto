@@ -57,7 +57,7 @@ export function TaskRunBanner({ projectId, onOpenAgents }: { projectId?: number;
               {ids.map((id) => {
                 const index = steps.findIndex((s) => s.id === id);
                 // stage name without its "[Phase]" prefix and "— после: check" tail; the live action on its own line
-                const title = index >= 0 ? steps[index].title.replace(/^s*[[^]]{1,24}]s*/, '').replace(/s+[—-]s+(после|after|check)s*:.*$/i, '') : '';
+                const title = index >= 0 ? steps[index].title.replace(/^\s*\[[^\]]{1,24}\]\s*/, '').replace(/\s+[—-]\s+(после|after|check)\s*:.*$/i, '') : '';
                 const done = steps.filter((s) => s.status === 'done').length;
                 return (
                   <div key={id} className="mt-0.5">

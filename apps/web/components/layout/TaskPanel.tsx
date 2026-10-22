@@ -179,7 +179,7 @@ export function TaskPanel({ projectId, collapsed, onToggle }: TaskPanelProps) {
                   <div className="min-w-0 flex-1">
                     {(() => {
                       // "[Phase] what to do — после: check" → a phase chip, the task, and the check on its own grey line
-                      const m = /^s*[([^]]{1,24})]s*(.*?)(?:s+[—-]s+(?:после|after|check)s*:s*(.+))?$/i.exec(step.title);
+                      const m = /^\s*\[([^\]]{1,24})\]\s*(.*?)(?:\s+[—-]\s+(?:после|after|check)\s*:\s*(.+))?$/i.exec(step.title);
                       const phase = m?.[1] ?? '';
                       const text = m ? m[2] : step.title;
                       const check = m?.[3] ?? '';
