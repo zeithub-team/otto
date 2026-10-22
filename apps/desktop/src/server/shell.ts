@@ -11,6 +11,7 @@
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { withScaffoldRoom } from './scaffold';
 
 export type ShellMode = 'ask' | 'auto' | 'off';
 
@@ -113,7 +114,12 @@ function shellFor(command: string): { file: string; args: string[] } {
   return { file: '/bin/sh', args: ['-c', command] };
 }
 
+/** Run one command; scaffolders into a non-empty folder get the room they need (scaffold.ts). */
 export function runCommand(cwd: string, command: string, timeoutSeconds = DEFAULT_TIMEOUT_S, signal?: AbortSignal): Promise<CommandResult> {
+  return withScaffoldRoom(cwd, command, () => runRaw(cwd, command, timeoutSeconds, signal));
+}
+
+function runRaw(cwd: string, command: string, timeoutSeconds = DEFAULT_TIMEOUT_S, signal?: AbortSignal): Promise<CommandResult> {
   const timeout = Math.min(MAX_TIMEOUT_S, Math.max(1, Math.round(timeoutSeconds) || DEFAULT_TIMEOUT_S)) * 1000;
   const started = Date.now();
   return new Promise((resolve) => {
