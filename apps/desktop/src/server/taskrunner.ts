@@ -405,7 +405,8 @@ export function startTaskRun(deps: Deps, taskId: number, chatModel: string | nul
             // a step is done only when something really happened: Otto stopped a looping model, or the model
             // only talked (an apology, "skill not found") without changing a file or running a command
             else if (!out.error && /Otto остановил работу|Otto stopped the run/.test(out.text)) out.error = 'Этап не выполнен: модель пошла по кругу и была остановлена.';
-            else if (!out.error && out.changed.length === 0 && !out.ran) out.error = 'Этап не выполнен: модель не изменила ни одного файла и не выполнила ни одной команды.';
+            // nothing changed because the work was already there (e.g. written by the chat before the plan ran) is done, not failed
+            else if (!out.error && out.changed.length === 0 && !out.ran && !/(уже\s+(есть|существует|создан|сделан|выполнен|готов|настроен|содержит)|already\s+(exists|done|in place|created|has|contains|set up))/i.test(out.text)) out.error = 'Этап не выполнен: модель не изменила ни одного файла и не выполнила ни одной команды.';
             // the model's own word that the step is unfinished outweighs the files it touched: one more go, then stop
             if (!out.error && saysUnfinished(out.text) && !run.stopped) {
               const again = await attempt(

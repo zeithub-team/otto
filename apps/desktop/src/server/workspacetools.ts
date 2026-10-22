@@ -576,7 +576,7 @@ export function runTool(
     if (!title || list.length === 0) return "Usage: plan_task requires 'title' and a non-empty 'steps' array";
     if (!onPlanTask) return 'Task board is not available';
     onPlanTask(title, list);
-    return `План создан: «${title}», этапов: ${list.length}. Он появился на панели задач — выполнять по этапам можно кнопкой «Выполнить».`;
+    return `План создан: «${title}», этапов: ${list.length}. Он появился на панели задач и будет выполнен по этапам сразу после этого ответа. Сам эту работу сейчас НЕ делай (не пиши файлы, не запускай команды): ответь пользователю одной-двумя фразами, что план готов и выполняется.`;
   }
 
   return 'Unknown tool';
