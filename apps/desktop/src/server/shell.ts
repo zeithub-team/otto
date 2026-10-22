@@ -119,7 +119,7 @@ export function runCommand(cwd: string, command: string, timeoutSeconds = DEFAUL
   return withScaffoldRoom(cwd, command, async () => {
     const first = await runRaw(cwd, command, timeoutSeconds, signal);
     // Docker Desktop not running: start it, wait for the engine and run the command once more
-    if (first.code !== 0 && /docker/i.test(command)) {
+    if (first.code !== 0 && /\bdocker\b/i.test(command)) {
       const env = await import('./env');
       if (env.DOCKER_DOWN.test(first.output)) {
         const up = await env.ensureDockerRunning();
