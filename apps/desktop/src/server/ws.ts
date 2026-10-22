@@ -268,9 +268,10 @@ export function attachChatWs(
   deps: ServerDeps,
 ): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true });
-  let queue: Promise<void> = Promise.resolve();
 
   wss.on('connection', (ws) => {
+    // one queue per connection: frames of one chat stay in order, other chats do not wait for it
+    let queue: Promise<void> = Promise.resolve();
     ws.on('error', () => {
       /* the peer went away — nothing to do */
     });

@@ -11,7 +11,7 @@ export function requestPermission(details: { kind: 'terminal' | 'ssh'; action: s
   const event = { id, ...details };
   requests.set(id, event);
   const decision = new Promise<boolean>((resolve) => {
-    const timer = setTimeout(() => { pending.delete(id); resolve(false); }, TIMEOUT_MS);
+    const timer = setTimeout(() => { pending.delete(id); requests.delete(id); resolve(false); }, TIMEOUT_MS);
     pending.set(id, { resolve, timer });
   });
   setImmediate(() => permissionEvents?.(event));

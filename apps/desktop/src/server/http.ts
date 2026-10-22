@@ -171,7 +171,7 @@ export function readBody(
     const onData = (chunk: Buffer): void => {
       total += chunk.length;
       if (total > limit) {
-        fail(new HttpError(413, 'File is larger than 10 MB'));
+        fail(new HttpError(413, `Request body is larger than ${Math.round(limit / 1048576)} MB`));
         return;
       }
       chunks.push(chunk);
