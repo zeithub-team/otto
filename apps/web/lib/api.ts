@@ -875,8 +875,8 @@ export async function startAgent(projectId: number, prompt: string, title?: stri
   if (!res.ok) throw new Error(await apiError(res, tt('err.agentStart')));
   return res.json();
 }
-export async function fetchAgents(projectId: number): Promise<AgentRun[]> {
-  const res = await fetch(`${API_BASE}/api/agents?project_id=${projectId}`);
+export async function fetchAgents(projectId: number, all = false): Promise<AgentRun[]> {
+  const res = await fetch(`${API_BASE}/api/agents?${all ? 'all=1' : `project_id=${projectId}`}`);
   if (!res.ok) return [];
   const rows = await res.json();
   return Array.isArray(rows) ? rows : [];
@@ -1173,12 +1173,13 @@ export async function fetchTaskRuns(projectId: number): Promise<TaskRun[]> {
 }
 
 /** Start executing the task's checklist stage by stage, or ask the AI to plan it. */
-export async function startTaskAction(taskId: number, action: 'run' | 'plan', model?: string): Promise<TaskRun> {
+export async function startTaskAction(taskId: number, action: 'run' | 'plan', model?: string, single = false): Promise<TaskRun> {
+  const chosen = model ?? selectedModel();
   const res = await fetch(`${API_BASE}/api/tasks/${taskId}/${action}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    // default to the model picked in the chat composer
-    body: JSON.stringify((model ?? selectedModel()) ? { model: model ?? selectedModel() } : {}),
+    // default to the model picked in the chat composer; single = only the next stage
+    body: JSON.stringify({ ...(chosen ? { model: chosen } : {}), ...(single ? { single: true } : {}) }),
   });
   if (!res.ok) throw new Error(await apiError(res, 'Failed to start task'));
   return res.json();

@@ -16,9 +16,10 @@ export interface ToolSpec { name: string; description: string; parameters: Recor
 const GROUPS: Record<string, string[]> = {
   app: ['otto_appearance', 'otto_open', 'otto_settings', 'otto_about'],
   tasks: ['otto_tasks'],
-  services: ['otto_docker', 'run_command'],
+  services: ['otto_stack', 'otto_docker', 'run_command'],
   ssh: ['ssh_connect', 'ssh_sessions', 'ssh_exec', 'ssh_list', 'ssh_read_file', 'ssh_write_file', 'ssh_disconnect'],
-  run: ['run_command', 'otto_preview', 'otto_docker', 'list_files', 'read_file'],
+  run: ['otto_stack', 'run_command', 'otto_preview', 'otto_docker', 'list_files', 'read_file'],
+  deploy: ['otto_stack', 'list_files', 'read_file', 'write_file', 'replace_in_file', 'run_command', 'otto_docker'],
   code: ['list_files', 'read_file', 'search_files', 'replace_in_file', 'write_file', 'append_file', 'delete_file', 'otto_preview', 'use_skill', 'read_skill_file', 'ask_user'],
   read: ['list_files', 'read_file', 'search_files'],
   // only offered while the chat's Web switch is on (the tool list itself is filtered by it)
@@ -32,6 +33,7 @@ const KINDS: Array<[string, RegExp]> = [
   ['tasks', /(задач|\btasks?\b|todo|тудушк|tapşırıq)/i],
   ['services', /(сервис|service|docker|postgres|mysql|maria|redis|mongo|rabbit|elastic|баз[уаы] данн|(?<![а-яё])бд(?![а-яё])|контейнер|container|compose)/i],
   ['ssh', /(\bssh\b|sftp|подключись к сервер|connect to (the )?server|\b\d{1,3}(\.\d{1,3}){3}\b)/i],
+  ['deploy', /(деплой|deploy|задеплой|dockerfile|докер.?файл|dockeriz|докериз|контейнериз|стек|stack|бэк|бек|backend|фронт|frontend|(?<![а-яё])порт[ауыео]?(?![а-яё])|\bports?\b|креды|credential|\.env|окружени|environment|nginx)/i],
   ['run', /(запуст|подними|подним|\bstart\b|\brun\b|serve|превью|preview|покажи|показать|открой в браузер|dev[- ]?сервер|dev server|işə sal)/i],
   ['code', /(файл|file|код|code|html|css|\bjs\b|javascript|typescript|php|python|страниц|page|лендинг|landing|функци|function|компонент|component|исправ|почини|fix|замени|replace|измени|change|добав|add|создай|create|сгенерир|generate|напиши|write|верст|стил|style|удали|delete|remove|fayl)/i],
   ['connectors', /(figma|miro|jira|linear|asana|trello|notion|confluence|slack|github|gitlab|sentry|supabase|коннектор|connector|подключени[ея] (к )?сервис|issue|тикет|ticket|макет|дизайн|design|доск[уаеи]|board|пулл?.?реквест|pull request|\bpr\b|merge request)/i],
@@ -70,6 +72,7 @@ const SHORT: Record<string, string> = {
   use_skill: 'load the rules of a skill listed in the system prompt before doing that kind of work. args: {name}',
   read_skill_file: 'read a file that comes with a skill. args: {name, path}',
   run_command: `run ONE shell command in the project folder (${process.platform === 'win32' ? 'Windows PowerShell' : process.platform === 'darwin' ? 'macOS, sh' : 'Linux, sh'}). background=true for servers that keep running (php artisan serve, npm run dev). args: {command, background?}`,
+  otto_stack: 'the whole project: {action: "detect"} lists every app (Laravel, Next, React…), its ports, Docker files and .env settings; {action: "up", mode?: hybrid|local|docker} starts ALL of them with their DB/Redis; {action: "status"|"logs"|"down"}',
   otto_docker: 'the project\'s Docker services from otto.compose.yaml. args: {action: status|up|down|service-start|service-stop|service-restart|service-logs, service?}',
   otto_preview: 'show in Otto\'s Preview tab. args: {mode: "file", path} for an HTML file; {mode: "url", url} for a running server; {mode: "run"} to start the project and show it',
   otto_open: 'open a section of Otto. args: {view: chat|project|data|ssh|agents|services|models|plugins|connectors|settings|preview|docs, page?: terminal|agent|models|permissions|general|projects|server}',

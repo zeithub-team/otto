@@ -9,6 +9,7 @@ import { CloudProviders } from './CloudProviders';
 import { SkillsPanel } from './SkillsPanel';
 import { ProjectsRoot } from './ProjectsRoot';
 import { SettingField } from './settings/SettingField';
+import { RolesCard } from './settings/RolesCard';
 import { useAppSettings, type AppSettingsApi } from './settings/useAppSettings';
 import { THEMES, getTheme, setTheme, type ThemeId } from '../../lib/theme';
 import { useT, LOCALES } from '../../lib/i18n';
@@ -287,6 +288,7 @@ export function SettingsView() {
             {page === 'models' && (
               <>
                 <CloudProviders />
+                <RolesCard api={api} />
                 <Section icon={Cpu} title={t('settings.models.local')} hint={t('settings.models.localHint')}>
                   <Fields api={api} page="models" extra={{ 'ollama.url': <OllamaTest api={api} />, 'claude.cli': api.value('claude.cli') ? <SubscriptionAuth kind="claude" autoLogin /> : null, 'codex.cli': api.value('codex.cli') ? <SubscriptionAuth kind="codex" autoLogin /> : null }} />
                 </Section>

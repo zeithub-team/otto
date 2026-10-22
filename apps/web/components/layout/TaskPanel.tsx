@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   Bot, Check, ChevronDown, ChevronRight, Circle, CircleDot, CheckCircle2, ListTodo,
-  Loader2, Play, Plus, RotateCcw, Sparkles, Square, Trash2, User,
+  Loader2, Play, Plus, RotateCcw, Sparkles, Square, Trash2, User, StepForward,
 } from 'lucide-react';
 import type { Task } from '../../types';
 import { useTasks } from '../../hooks/useTasks';
@@ -110,9 +110,14 @@ export function TaskPanel({ projectId, collapsed, onToggle }: TaskPanelProps) {
                 <Square size={12} fill="currentColor" />
               </button>
             ) : steps.some((s) => s.status !== 'done') ? (
-              <button onClick={() => void board.run(task.id)} title={t('tasks.run')} className="p-0.5 text-[var(--accent)] hover:opacity-80">
-                <Play size={13} fill="currentColor" />
-              </button>
+              <>
+                <button onClick={() => void board.runNext(task.id)} title={t('tasks.runNext')} className="p-0.5 text-[var(--accent)] hover:opacity-80">
+                  <StepForward size={13} />
+                </button>
+                <button onClick={() => void board.run(task.id)} title={t('tasks.run')} className="p-0.5 text-[var(--accent)] hover:opacity-80">
+                  <Play size={13} fill="currentColor" />
+                </button>
+              </>
             ) : null}
             <button
               onClick={() => void board.remove(task.id)}

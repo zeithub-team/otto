@@ -52,7 +52,8 @@ interface Rec {
   probe: ReturnType<typeof setInterval> | null;
 }
 
-const runs = new Map<number, Rec>();
+/** One run per key: a project id (the Preview's app), or `<id>:<part>` for the other parts of a stack (stack.ts). */
+const runs = new Map<number | string, Rec>();
 const LOG_LINES = 300;
 // eslint-disable-next-line no-control-regex
 const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
@@ -185,6 +186,8 @@ function portOpen(port: number): Promise<boolean> {
 }
 
 /** The command lost the race for its port: if something already serves it, show that server. */
+export { portOpen };
+
 async function attachIfServed(rec: Rec): Promise<void> {
   const port = rec.state.busy_port;
   if (!port || rec.state.url) return;
@@ -196,11 +199,11 @@ async function attachIfServed(rec: Rec): Promise<void> {
   }
 }
 
-export function getRun(projectId: number): RunState {
+export function getRun(projectId: number | string): RunState {
   return runs.get(projectId)?.state ?? emptyState();
 }
 
-export function stopRun(projectId: number): RunState {
+export function stopRun(projectId: number | string): RunState {
   const rec = runs.get(projectId);
   if (!rec) return emptyState();
   if (rec.probe) clearInterval(rec.probe);
@@ -212,7 +215,7 @@ export function stopRun(projectId: number): RunState {
 }
 
 /** Start `command` in `root` (replaces a previous run of the same project). */
-export function startRun(projectId: number, root: string, command: string, expectedPort: number | null = null): RunState {
+export function startRun(projectId: number | string, root: string, command: string, expectedPort: number | null = null): RunState {
   stopRun(projectId);
   const rec: Rec = {
     proc: null,

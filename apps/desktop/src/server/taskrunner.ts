@@ -15,7 +15,8 @@ import type { Db, TaskRow } from './db';
 import { generateResponse } from './ollama';
 import { isDirectory, resolvePath } from './paths';
 import { registerRun } from './agents';
-import { FileClaims, PARALLEL_RULES, afterOf, checkIssue, checkOf, parseStep, phaseOf, readyGroup, shellCheck, stepDetail } from './steps';
+import { roleOrChat } from './roles';
+import { FileClaims, PARALLEL_RULES, afterOf, checkIssue, checkOf, nextGroup, parseStep, phaseOf, readyGroup, shellCheck, stepDetail } from './steps';
 
 export type RunStatus = 'planning' | 'running' | 'done' | 'error' | 'stopped';
 
@@ -108,6 +109,9 @@ async function drive(
     guardWrite?: (tool: string, path: string) => string | null;
     /** Name of the run in the Agents tab, and what stopping it there does to the task run. */
     title: string;
+    taskId: number;
+    /** Reasoning effort of the role (planner: high, coder: low by default). */
+    effort?: string | null;
     onStopAll?: () => void;
     /** Live status: 'start' when the agent begins, then the tool it just used and the file it touched. */
     onActivity?: (tool: string, path?: string) => void;
@@ -119,8 +123,11 @@ async function drive(
 ): Promise<DriveResult> {
   const result: DriveResult = { text: '', error: null, changed: [], ran: false };
   // every step is visible in the Agents tab with its live log
-  const shown = registerRun({ projectId: opts.projectId, title: opts.title, prompt: opts.prompt, model: opts.model, onStop: opts.onStopAll });
+  const shown = registerRun({ projectId: opts.projectId, title: opts.title, prompt: opts.prompt, model: opts.model, origin: { kind: 'task', label: opts.title, taskId: opts.taskId }, onStop: opts.onStopAll });
   const stopped = (): boolean => opts.isStopped() || shown.isStopped();
+  // Stop cuts the model request off too (not only between chunks)
+  const abort = new AbortController();
+  const watchStop = setInterval(() => { if (stopped()) abort.abort(); }, 300);
   opts.onActivity?.('start');
   const stream = generateResponse({
     prompt: opts.prompt,
@@ -131,6 +138,8 @@ async function drive(
     useTools: true,
     useContext: true,
     extraSystem: opts.extraSystem,
+    effort: opts.effort ?? null,
+    signal: abort.signal,
     onPlanTask: opts.onPlanTask,
     guardWrite: opts.guardWrite,
     skillGoal: opts.skillGoal,
@@ -144,8 +153,7 @@ async function drive(
       }
     },
     onToolEvent: (name, args, output) => {
-      const argStr = (() => { try { return JSON.stringify(args); } catch { return ''; } })();
-      shown.log('tool', `${name}(${argStr.slice(0, 120)}) → ${String(output).slice(0, 160)}`);
+      shown.tool(name, args, String(output));
       const touched = (args as { path?: unknown } | null)?.path;
       opts.onActivity?.(name, typeof touched === 'string' ? touched : undefined);
       if (ranOk(name, String(output))) result.ran = true;
@@ -172,6 +180,8 @@ async function drive(
     }
   } catch (exc) {
     result.error = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    clearInterval(watchStop);
   }
   shown.finish(result.error ? 'error' : stopped() ? 'stopped' : 'done', result.error ?? undefined);
   if (stopped() && !opts.isStopped()) opts.onStopAll?.(); // stopped from the Agents tab
@@ -297,8 +307,13 @@ export async function projectContainers(projectPath: string): Promise<string> {
   return r.code === 0 ? r.output.trim().split('\n').filter(Boolean).slice(0, 10).join('\n') : '';
 }
 
-/** Run the unfinished steps of a task in order. Returns immediately. */
-export function startTaskRun(deps: Deps, taskId: number, model: string | null = null): TaskRun {
+/**
+ * Run the unfinished steps of a task in order. Returns immediately.
+ * `single`: only the next stage (or parallel group), then stop — step-by-step mode from the task board.
+ */
+export function startTaskRun(deps: Deps, taskId: number, chatModel: string | null = null, single = false): TaskRun {
+  // the steps are the coder's work (Settings → Models → Model roles)
+  const { model, effort } = roleOrChat('coder', chatModel);
   const task = deps.db.getTask(taskId);
   if (!task || task.parent_id !== null) throw new Error('Task not found');
   if (isActive(runs.get(taskId))) return view(runs.get(taskId)!);
@@ -365,6 +380,8 @@ export function startTaskRun(deps: Deps, taskId: number, model: string | null = 
               extraSystem: partners.length ? `${STEP_RULES}\n\n${PARALLEL_RULES}` : STEP_RULES,
               model,
               messageId: `task-${taskId}-${step.id}-${n}`,
+              taskId,
+              effort,
               isStopped: () => run.stopped,
               isPaused: () => run.paused,
               title: `Задача «${task.title}» · этап ${steps.indexOf(step) + 1}: ${step.title}`,
@@ -441,6 +458,7 @@ export function startTaskRun(deps: Deps, taskId: number, model: string | null = 
         }
         touch();
         if (run.stopped) break;
+        if (single && !failure) break;
         // a local model sometimes emits a garbled tool call (Ollama: "XML syntax error … illegal character"):
         // it is random, so just run the step again
         if (failure && /XML syntax error|illegal character|invalid character|unexpected end of JSON|error parsing tool call/i.test(failure) && garbledRetries < 3) {
@@ -515,7 +533,9 @@ export const PLAN_RULES =
   'Без базы такие команды не проверить: не ставь их раньше.';
 
 /** Ask the model to break a task into checklist steps (attached to `taskId`). */
-export function startTaskPlan(deps: Deps, taskId: number, model: string | null = null): TaskRun {
+export function startTaskPlan(deps: Deps, taskId: number, chatModel: string | null = null): TaskRun {
+  // planning is the planner's work
+  const { model, effort } = roleOrChat('planner', chatModel);
   const task = deps.db.getTask(taskId);
   if (!task || task.parent_id !== null) throw new Error('Task not found');
   if (isActive(runs.get(taskId))) return view(runs.get(taskId)!);
@@ -549,8 +569,8 @@ export function startTaskPlan(deps: Deps, taskId: number, model: string | null =
           'Сейчас твоя единственная цель — составить план через plan_task. Не выполняй саму работу и не пиши файлы.',
         model,
         messageId: `plan-${taskId}`,
-        // planning only: the run ends the moment the plan exists (a model went on to build the whole project
-        // itself right after plan_task), and no file is written before that
+        taskId,
+        effort,
         isStopped: () => run.stopped || created > 0,
         isPaused: () => run.paused,
         guardWrite: () => PLANNING_ONLY,
@@ -579,6 +599,8 @@ export function startTaskPlan(deps: Deps, taskId: number, model: string | null =
             extraSystem: 'Отвечай только нумерованным списком этапов.',
             model,
             messageId: `plan2-${taskId}`,
+            taskId,
+            effort,
             isStopped: () => run.stopped,
             isPaused: () => run.paused,
             title: `План задачи «${task.title}»`,

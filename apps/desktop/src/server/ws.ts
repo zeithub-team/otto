@@ -1,13 +1,18 @@
 /**
- * WebSocket chat — port of `backend/api/chat.py` (`websocket_endpoint`).
+ * WebSocket chat.
  *
  * Endpoint: `ws://<host>/api/chat/ws/chat`
  *
- * Messages are processed strictly sequentially (the Python `while True`
- * loop `await`s one generation before reading the next frame — the frontend
- * queues its own messages behind that), a generation is stopped by closing
- * the socket (`useChat.stopGeneration()`), and the final assistant answer is
- * persisted whether the stream finished, failed or the client disconnected.
+ * A prompt starts a run of its chat (chatruns.ts). The run does not belong to the socket: closing it
+ * (switching the project, reloading) only stops watching, and a socket that attaches to the chat later
+ * gets the current state replayed. One chat runs one prompt at a time; different chats run side by side.
+ *
+ * Client frames: a prompt `{prompt, project_id, chat_id, …}`, or a control frame
+ *   {action: 'attach', chat_id}                       — watch the chat (replays a running answer)
+ *   {action: 'stop', chat_id}                         — stop its run
+ *   {action: 'inject', chat_id, prompt, client_msg_id} — a message for the running agent (read at its next step)
+ *   {action: 'update', chat_id, model?, num_ctx?, effort?} — switch the model / context / effort mid-run
+ * Server frames: the answer chunks, plus `{role: 'run_state', chat_id, running, …}` when a run starts / ends.
  */
 import { randomUUID } from 'crypto';
 import * as http from 'http';
@@ -17,6 +22,10 @@ import { errorMessage } from './http';
 import { generateResponse } from './ollama';
 import { parseStep, stepDetail } from './steps';
 import { isDirectory, resolvePath } from './paths';
+import { tasksNote } from './tasknote';
+import { applyRole, roleFor, roleOrChat, wantsExecution } from './roles';
+import { startTaskRun } from './taskrunner';
+import { activeRun, beginRun, controlOf, emit, endRun, injectMessage, stopRun, updateRun } from './chatruns';
 import {
   interruptTerminal,
   onTerminalExit,
@@ -30,6 +39,7 @@ import {
 export const CHAT_WS_PATH = '/api/chat/ws/chat';
 
 interface ChatPayload {
+  action?: unknown;
   prompt?: unknown;
   history?: unknown;
   project_id?: unknown;
@@ -60,21 +70,23 @@ function sendSystem(ws: WebSocket, content: string): void {
   if (ws.readyState === WebSocket.OPEN) ws.send(systemChunk(content));
 }
 
-/** One incoming frame → zero or more outgoing chunks. */
-async function handleFrame(ws: WebSocket, raw: string, deps: ServerDeps): Promise<void> {
-  let messageData: ChatPayload;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new TypeError('not an object');
-    }
-    messageData = parsed as ChatPayload;
-  } catch {
-    // Python: `json.loads` raises inside the endpoint → connection is closed.
-    ws.close();
-    return;
-  }
+/** Everyone watching a chat (one set per chat, shared with its run). */
+const viewers = new Map<number, Set<(chunk: string) => void>>();
+function viewersOf(chatId: number): Set<(chunk: string) => void> {
+  let set = viewers.get(chatId);
+  if (!set) { set = new Set(); viewers.set(chatId, set); }
+  return set;
+}
 
+/** The prompts waiting in each chat (one run at a time per chat). */
+const chatQueues = new Map<string, Promise<void>>();
+
+const runState = (chatId: number, running: boolean, extra: Record<string, unknown> = {}): string =>
+  JSON.stringify({ role: 'run_state', chat_id: chatId, running, ...extra });
+
+/** One prompt → one run of its chat; messages typed meanwhile that it never read become the next prompt. */
+async function handlePrompt(ws: WebSocket | null, messageData: ChatPayload, deps: ServerDeps, watch: (chatId: number) => void): Promise<void> {
+  const reply = (text: string): void => { if (ws) sendSystem(ws, text); };
   const prompt = typeof messageData.prompt === 'string' ? messageData.prompt : '';
   const history = Array.isArray(messageData.history) ? messageData.history : [];
   const projectIdRaw = messageData.project_id;
@@ -88,11 +100,11 @@ async function handleFrame(ws: WebSocket, raw: string, deps: ServerDeps): Promis
     typeof messageData.use_web === 'boolean' ? messageData.use_web : null;
 
   if (!prompt) {
-    sendSystem(ws, 'Введите сообщение.');
+    reply('Введите сообщение.');
     return;
   }
   if (projectIdRaw === null || projectIdRaw === undefined) {
-    sendSystem(ws, 'Выберите проект перед отправкой сообщения.');
+    reply('Выберите проект перед отправкой сообщения.');
     return;
   }
   const projectId = Number(projectIdRaw);
@@ -101,16 +113,16 @@ async function handleFrame(ws: WebSocket, raw: string, deps: ServerDeps): Promis
   try {
     const storedPath = deps.db.getProjectPath(projectId);
     if (storedPath === null) {
-      sendSystem(ws, 'Выберите проект перед отправкой сообщения.');
+      reply('Выберите проект перед отправкой сообщения.');
       return;
     }
     projectPath = resolvePath(storedPath);
     if (!isDirectory(projectPath)) {
-      sendSystem(ws, 'Папка проекта не найдена.');
+      reply('Папка проекта не найдена.');
       return;
     }
   } catch (exc) {
-    sendSystem(ws, `Не удалось открыть проект: ${errorMessage(exc)}`);
+    reply(`Не удалось открыть проект: ${errorMessage(exc)}`);
     return;
   }
 
@@ -121,9 +133,11 @@ async function handleFrame(ws: WebSocket, raw: string, deps: ServerDeps): Promis
     const raw = messageData.chat_id;
     chatId = typeof raw === 'number' && raw > 0 ? raw : deps.db.ensureChat(projectId).id;
   } catch (exc) {
-    sendSystem(ws, `Не удалось открыть чат: ${errorMessage(exc)}`);
+    reply(`Не удалось открыть чат: ${errorMessage(exc)}`);
     return;
   }
+  // a new chat made for this prompt: its window watches it (a known chat was watched on arrival)
+  if (!(typeof messageData.chat_id === 'number' && messageData.chat_id > 0)) watch(chatId);
   // Persist the user's message so history survives reloads (id matches the
   // client-generated bubble id when provided).
   try {
@@ -133,30 +147,42 @@ async function handleFrame(ws: WebSocket, raw: string, deps: ServerDeps): Promis
     console.log(`[history] failed to save user msg: ${String(exc)}`);
   }
 
+  // model roles: plans / audits go to the planner, work to the coder (Settings → Models → Model roles)
+  const ru = /[а-яё]/i.test(prompt);
+  const role = useTools === false ? null : roleFor(prompt);
+  const chatEffort = typeof messageData.effort === 'string' ? messageData.effort : null;
+  const pick = role ? applyRole(role, model, chatEffort, ru) : { model, effort: chatEffort, label: '' };
+  const run = beginRun({ chatId, projectId, messageId, prompt, model: pick.model }, viewersOf(chatId));
+  const send = (chunk: string): void => emit(run, chunk);
+  send(runState(chatId, true, { model, started_at: run.startedAt, prompt: prompt.slice(0, 200) }));
+
   const toolEvents: { name: string; args: unknown; result: string }[] = [];
-  // closing the socket is the stop button: end the model request and any running command right away
-  const stop = new AbortController();
-  ws.once('close', () => stop.abort());
+  /** The task the planner made in this run (the coder may carry it out right after). */
+  let planned: number | null = null;
   const stream = generateResponse({
-    signal: stop.signal,
     prompt,
     messageId,
     projectId,
     projectPath,
     history,
     images,
-    model,
+    model: pick.model,
     useTools,
     useContext,
     useWeb,
-    effort: typeof messageData.effort === 'string' ? messageData.effort : null,
+    effort: pick.effort,
+    leadNotice: pick.label || undefined,
     numCtx: typeof messageData.num_ctx === 'number' ? messageData.num_ctx : null,
     temperature: typeof messageData.temperature === 'number' ? messageData.temperature : null,
     // a person is in the chat: run_command can ask them before running anything
     interactive: true,
+    tasksNote: (() => { try { return tasksNote(deps.db.listTasks(projectId), prompt); } catch { return ''; } })(),
+    signal: run.controller.signal,
+    control: controlOf(run),
     onCreateTask: (title, detail) => {
       try {
         deps.db.createTask(projectId, title, detail, 'agent');
+        send(JSON.stringify({ role: 'ui', action: 'tasks-changed' }));
       } catch (exc) {
         console.log(`[tasks] agent create_task failed: ${String(exc)}`);
       }
@@ -164,32 +190,33 @@ async function handleFrame(ws: WebSocket, raw: string, deps: ServerDeps): Promis
     onPlanTask: (title, steps) => {
       try {
         const parent = deps.db.createTask(projectId, title, '', 'agent');
+        planned = parent.id;
         for (const raw of steps) {
           const step = parseStep(raw);
           deps.db.createTask(projectId, step.title, stepDetail(step), 'agent', parent.id, step.parallel);
         }
+        send(JSON.stringify({ role: 'ui', action: 'tasks-changed' }));
       } catch (exc) {
         console.log(`[tasks] agent plan_task failed: ${String(exc)}`);
       }
     },
     onModelSwitch: (switched) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ role: 'model_switch', model: switched }));
+      run.model = switched;
+      send(JSON.stringify({ role: 'model_switch', model: switched, chat_id: chatId }));
     },
     onUi: (action) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ role: 'ui', ...action }));
+      send(JSON.stringify({ role: 'ui', ...action }));
     },
     onUsage: (usage) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ role: 'usage', ...usage }));
+      send(JSON.stringify({ role: 'usage', ...usage }));
     },
     onToolEvent: (name, args, result) => {
       toolEvents.push({ name, args, result });
       // Surface tool activity in the chat UI (also drives Files auto-refresh).
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          role: 'tool', tool: name, args, result: String(result).slice(0, 400),
-          id: `tool-${randomUUID()}`, timestamp: Math.floor(Date.now() / 1000),
-        }));
-      }
+      send(JSON.stringify({
+        role: 'tool', tool: name, args, result: String(result).slice(0, 400),
+        id: `tool-${randomUUID()}`, timestamp: Math.floor(Date.now() / 1000),
+      }));
     },
   });
 
@@ -224,7 +251,7 @@ async function handleFrame(ws: WebSocket, raw: string, deps: ServerDeps): Promis
     try {
       deps.db.addProjectLog(projectId, chatId, {
         prompt,
-        model: typeof model === 'string' ? model : null,
+        model: run.model,
         tools: toolEvents,
         answer: finalText,
       });
@@ -233,14 +260,10 @@ async function handleFrame(ws: WebSocket, raw: string, deps: ServerDeps): Promis
     }
   };
 
+  // the run goes on whether or not anyone is watching: the answer is saved at the end either way
   try {
     for await (const chunk of stream) {
-      if (ws.readyState !== WebSocket.OPEN) {
-        // The client often closes right after the final chunk — save first.
-        persist();
-        return;
-      }
-      ws.send(chunk);
+      send(chunk);
       let parsed: Record<string, unknown>;
       try {
         parsed = JSON.parse(chunk) as Record<string, unknown>;
@@ -256,11 +279,41 @@ async function handleFrame(ws: WebSocket, raw: string, deps: ServerDeps): Promis
       }
     }
   } catch (exc) {
+    send(systemChunk(errorMessage(exc)));
+  } finally {
     persist();
-    sendSystem(ws, errorMessage(exc));
-    return;
+    endRun(run);
+    send(runState(chatId, false, { model: run.model }));
   }
-  persist();
+  // "audit and fix", "make tasks and do them": the coder runs the plan stage by stage (task board, Agents tab)
+  if (role === 'planner' && planned !== null && wantsExecution(prompt) && !run.controller.signal.aborted) {
+    try {
+      const coder = roleOrChat('coder', model, chatEffort);
+      startTaskRun(deps, planned, coder.model);
+      const note = JSON.stringify({
+        role: 'assistant', id: `chain-${messageId}`, timestamp: Math.floor(Date.now() / 1000), projectId, isStreaming: false,
+        content: ru
+          ? `🔧 План передан исполнителю${coder.model ? ` (${coder.model})` : ''}: этапы выполняются по очереди — прогресс в панели задач и во вкладке «Агенты».`
+          : `🔧 The plan went to the coder${coder.model ? ` (${coder.model})` : ''}: its stages run one by one — progress in the task panel and the Agents tab.`,
+      });
+      for (const l of viewersOf(chatId)) l(note);
+      for (const l of viewersOf(chatId)) l(JSON.stringify({ role: 'ui', action: 'tasks-changed' }));
+    } catch (exc) {
+      console.log(`[roles] chain failed: ${String(exc)}`);
+    }
+  }
+  // messages typed meanwhile that the agent never read (a CLI model, or the run ended first): the next prompt
+  const left = run.inbox.splice(0);
+  if (left.length && !run.controller.signal.aborted) {
+    enqueue(String(chatId), () => handlePrompt(null, { ...messageData, prompt: left.join('\n\n'), chat_id: chatId, client_msg_id: undefined, images: undefined }, deps, () => undefined));
+  }
+}
+
+function enqueue(key: string, job: () => Promise<void>): void {
+  const prev = chatQueues.get(key) ?? Promise.resolve();
+  const next = prev.then(() => job().catch((exc) => { console.error('[ws] message failed:', exc); }));
+  chatQueues.set(key, next);
+  void next.finally(() => { if (chatQueues.get(key) === next) chatQueues.delete(key); });
 }
 
 /**
@@ -274,19 +327,75 @@ export function attachChatWs(
   const wss = new WebSocketServer({ noServer: true });
 
   wss.on('connection', (ws) => {
-    // one queue per connection: frames of one chat stay in order, other chats do not wait for it
-    let queue: Promise<void> = Promise.resolve();
+    const listener = (chunk: string): void => { if (ws.readyState === WebSocket.OPEN) ws.send(chunk); };
+    const watching = new Set<number>();
+    // a window shows one chat: watching another one stops watching the previous (its run goes on)
+    const watch = (chatId: number): void => {
+      if (watching.has(chatId)) return;
+      for (const id of watching) viewersOf(id).delete(listener);
+      watching.clear();
+      watching.add(chatId);
+      viewersOf(chatId).add(listener);
+    };
     ws.on('error', () => {
       /* the peer went away — nothing to do */
     });
+    // closing the socket only stops watching: runs go on
+    ws.on('close', () => {
+      for (const id of watching) viewersOf(id).delete(listener);
+      watching.clear();
+    });
     ws.on('message', (data) => {
       const raw = typeof data === 'string' ? data : data.toString('utf8');
-      // Python handles frames one at a time: chain onto the running task.
-      queue = queue.then(() =>
-        handleFrame(ws, raw, deps).catch((exc) => {
-          console.error('[ws] message failed:', exc);
-        }),
-      );
+      let frame: ChatPayload;
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new TypeError('not an object');
+        frame = parsed as ChatPayload;
+      } catch {
+        ws.close();
+        return;
+      }
+      const chatId = typeof frame.chat_id === 'number' ? frame.chat_id : 0;
+      const action = typeof frame.action === 'string' ? frame.action : '';
+      if (action === 'attach') {
+        if (!chatId) return;
+        watch(chatId);
+        const run = activeRun(chatId);
+        listener(runState(chatId, Boolean(run), run ? { model: run.model, started_at: run.startedAt, prompt: run.prompt.slice(0, 200) } : {}));
+        if (run) for (const chunk of run.latest.values()) listener(chunk);
+        return;
+      }
+      if (action === 'stop') {
+        if (chatId) stopRun(chatId);
+        return;
+      }
+      if (action === 'update') {
+        if (!chatId) return;
+        updateRun(chatId, {
+          model: typeof frame.model === 'string' && frame.model ? frame.model : undefined,
+          numCtx: typeof frame.num_ctx === 'number' ? frame.num_ctx : undefined,
+          effort: typeof frame.effort === 'string' ? frame.effort : undefined,
+        });
+        return;
+      }
+      if (action === 'inject') {
+        const text = typeof frame.prompt === 'string' ? frame.prompt : '';
+        const run = chatId ? activeRun(chatId) : undefined;
+        if (run && injectMessage(chatId, text)) {
+          try {
+            deps.db.saveMessage(String(frame.client_msg_id || randomUUID()), run.projectId, chatId, 'user', text, null);
+          } catch (exc) {
+            console.log(`[history] failed to save injected msg: ${String(exc)}`);
+          }
+          listener(JSON.stringify({ role: 'injected', chat_id: chatId, client_msg_id: frame.client_msg_id ?? null }));
+          return;
+        }
+        // nothing runs any more: an ordinary prompt
+      }
+      if (chatId) watch(chatId);
+      const key = chatId ? String(chatId) : `p${String(frame.project_id ?? '')}`;
+      enqueue(key, () => handlePrompt(ws, frame, deps, watch));
     });
   });
 
@@ -305,6 +414,7 @@ export function attachChatWs(
 
   return wss;
 }
+
 
 // ---------------------------------------------------------------------------
 // Terminal socket: live stdio of a project shell session (terminal.ts).

@@ -42,6 +42,13 @@ export interface AgentRun {
   updatedAt: number;
   /** A step of a task run from the task board (else started on the Agents tab). */
   source?: 'agent' | 'task';
+  projectName?: string | null;
+  /** The final answer without the "files changed" marker. */
+  summary?: string;
+  /** Who started it: the Agents tab, a task step, a chat (label = its name). */
+  origin?: { kind: 'agents' | 'task' | 'chat'; label?: string; taskId?: number; chatId?: number };
+  /** What it did. */
+  work?: { files: Array<{ path: string; action: 'created' | 'modified' | 'deleted' }>; commands: string[]; tools: number };
 }
 
 /** Framework-aware navigation (e.g. Laravel route → controller method). */
@@ -78,6 +85,8 @@ export interface ChatMessage {
   images?: string[];
   /** Options the user sent this message with (kept for regenerate). */
   sendOptions?: SendOptions;
+  /** Typed while the agent was working: delivered to the running task, not a new prompt. */
+  injected?: boolean;
   /** For role 'activity': tool lifecycle events from the backend. */
   event?: 'tool_start' | 'tool_end';
   /** For role 'activity': tool name (read_file, write_file, ...). */

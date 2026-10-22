@@ -141,6 +141,33 @@ function workspaceDirs(root: string, pkg: Pkg): string[] {
 }
 
 const FRONT_DIRS = ['frontend', 'client', 'web', 'ui', 'app', 'www', 'site', 'dashboard', 'admin'];
+/** Back ends kept in a sub-folder next to a front end. */
+const BACK_DIRS = ['backend', 'server', 'api', 'back', 'service'];
+
+/** A back end in the sub-folder `rel` (Laravel, Django, FastAPI, Flask, Rails, Go, a Node API), run from that folder. */
+function serverOptions(root: string, rel: string): Array<RunOption & { stack: string }> {
+  const dir = path.join(root, rel);
+  const at = (name: string): boolean => fs.existsSync(path.join(dir, name));
+  const cd = (cmd: string): string => `cd ${rel} && ${cmd}`;
+  const out: Array<RunOption & { stack: string }> = [];
+  const py = (readText(path.join(dir, 'requirements.txt')) + readText(path.join(dir, 'pyproject.toml'))).toLowerCase();
+  if (at('artisan')) out.push({ id: `back:${rel}`, label: `${rel}/ — Laravel (artisan serve)`, command: cd('php artisan serve'), port: 8000, kind: 'laravel', frontend: false, stack: 'Laravel' });
+  else if (at('manage.py')) out.push({ id: `back:${rel}`, label: `${rel}/ — Django`, command: cd('python manage.py runserver'), port: 8000, kind: 'django', frontend: false, stack: 'Django' });
+  else if (py.includes('fastapi') || py.includes('uvicorn')) {
+    const entry = ['main', 'app'].find((m) => at(`${m}.py`)) ?? (at('app/main.py') ? 'app.main' : 'main');
+    out.push({ id: `back:${rel}`, label: `${rel}/ — FastAPI`, command: cd(`uvicorn ${entry}:app --reload --port 8000`), port: 8000, kind: 'python', frontend: false, stack: 'FastAPI' });
+  } else if (py.includes('flask')) out.push({ id: `back:${rel}`, label: `${rel}/ — Flask`, command: cd('flask run --port 5000'), port: 5000, kind: 'python', frontend: false, stack: 'Flask' });
+  else if (at('bin/rails')) out.push({ id: `back:${rel}`, label: `${rel}/ — Rails`, command: cd('bin/rails server'), port: 3000, kind: 'rails', frontend: false, stack: 'Rails' });
+  else if (at('go.mod')) out.push({ id: `back:${rel}`, label: `${rel}/ — Go`, command: cd('go run .'), port: null, kind: 'go', frontend: false, stack: 'Go' });
+  else if (at('composer.json') && (at('public/index.php') || at('index.php'))) {
+    out.push({ id: `back:${rel}`, label: `${rel}/ — PHP`, command: cd(`php -S localhost:8000${at('public/index.php') ? ' -t public' : ''}`), port: 8000, kind: 'php', frontend: false, stack: 'PHP' });
+  } else if (at('package.json')) {
+    const pkg = readJson<Pkg>(path.join(dir, 'package.json'));
+    const info = pkg ? inspectPackage(pkg) : null;
+    if (pkg && info?.script) out.push({ id: `back:${rel}`, label: `${rel}/ — ${info.label} (${info.script})`, command: npmCommand(info.script, ` --prefix ${rel}`), port: info.port, kind: 'node', frontend: info.frontend, stack: info.label });
+  }
+  return out;
+}
 
 /** Parse the services and published host ports out of a compose file (no YAML library needed). */
 export function parseCompose(text: string): ComposeService[] {
@@ -310,6 +337,15 @@ export function detectProject(root: string): ProjectDetection {
   if (has('go.mod')) {
     stacks.push('Go');
     add({ id: 'go', label: 'Go (run)', command: 'go run .', port: null, kind: 'go', frontend: false });
+  }
+
+  // ---- back ends in sub-folders (a front end + an API in one repository) -----
+  for (const name of BACK_DIRS) {
+    if (!isDir(path.join(root, name))) continue;
+    for (const { stack, ...opt } of serverOptions(root, name)) {
+      add(opt);
+      if (!stacks.includes(stack)) stacks.push(stack);
+    }
   }
 
   // ---- Containers ------------------------------------------------------

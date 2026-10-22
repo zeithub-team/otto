@@ -54,7 +54,7 @@ const SUGGESTIONS = [
   { title: 'chat.sug.tests.title', prompt: 'chat.sug.tests.prompt', icon: FlaskConical },
 ];
 
-function renderMarkdown(text: string): JSX.Element[] {
+export function renderMarkdown(text: string): JSX.Element[] {
   const lines = text.split('\n');
   const elements: JSX.Element[] = [];
   let inCode = false;
@@ -510,7 +510,10 @@ export function ChatView({ messages, isProcessing, onSelectSuggestion, onRegener
                   }`}
                 >
                   {msg.role === 'user' ? (
-                    <UserText content={msg.content} />
+                    <>
+                      <UserText content={msg.content} />
+                      {msg.injected && <span className="mt-1 block text-[10px] opacity-75">↳ {t('chat.injected')}</span>}
+                    </>
                   ) : (
                     <div className="text-sm space-y-0.5">
                       {renderMarkdown(parseChanges(msg.content || '').text)}

@@ -16,7 +16,7 @@ export type SettingKind = 'number' | 'text' | 'select' | 'bool';
 
 export interface SettingDef {
   key: string;
-  page: 'models' | 'agent' | 'terminal' | 'permissions' | 'server';
+  page: 'models' | 'agent' | 'terminal' | 'permissions' | 'server' | 'roles';
   kind: SettingKind;
   default: string | number | boolean;
   min?: number;
@@ -43,6 +43,13 @@ export const SETTINGS: SettingDef[] = [
   { key: 'agent.localMode', page: 'agent', kind: 'select', default: 'auto', options: ['auto', 'guided', 'native'] },
   // a light local model that plans page / code work for the chat's model (planner.ts); empty = off
   { key: 'agent.planner', page: 'agent', kind: 'text', default: '' },
+  // model roles (roles.ts): auto = plans / audits on the planner, the work on the coder; empty model = the chat's one
+  { key: 'roles.mode', page: 'roles', kind: 'select', default: 'auto', options: ['auto', 'off'] },
+  { key: 'roles.planner.model', page: 'roles', kind: 'text', default: '', optional: true },
+  { key: 'roles.planner.effort', page: 'roles', kind: 'select', default: 'high', options: ['auto', 'off', 'low', 'medium', 'high', 'max'] },
+  { key: 'roles.coder.model', page: 'roles', kind: 'text', default: '', optional: true },
+  { key: 'roles.coder.effort', page: 'roles', kind: 'select', default: 'low', options: ['auto', 'off', 'low', 'medium', 'high', 'max'] },
+  { key: 'roles.chain', page: 'roles', kind: 'bool', default: true },
   { key: 'claude.cli', page: 'models', kind: 'bool', default: false },
   { key: 'codex.cli', page: 'models', kind: 'bool', default: false },
   { key: 'terminal.shell', page: 'terminal', kind: 'select', default: 'auto', options: ['auto', 'powershell', 'pwsh', 'cmd', 'bash', 'zsh', 'tabby'] },

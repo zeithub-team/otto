@@ -15,6 +15,8 @@ import { detectRun, getRun, startRun, stopRun } from './runner';
 import { live } from './appconfig';
 import { serviceSummary } from './servicesummary';
 import { internalHeaders } from './session';
+import { describeComposition, scanComposition } from './composition';
+import { downStack, recommendMode, stackLogs, stackStatus, upStack, type StackMode } from './stack';
 
 let dataDir = '';
 /** Where SSH keys and known hosts live (set once by index.ts). */
@@ -44,6 +46,8 @@ export const OTTO_GUIDE = [
   '- otto_settings: read settings or change the safe ones.',
   '- otto_tasks: the project\'s task list (the Tasks panel): list, add (one or many, e.g. imported from TASKS.md, with their status), update the status (todo / in_progress / done) or title, delete.',
   '- ssh_connect / ssh_disconnect: connect to a server (host, user, password or a saved key); then ssh_exec, ssh_list, ssh_read_file, ssh_write_file.',
+  '- otto_stack: what the project folder is made of (often several apps: a Laravel API, a Next.js site, a React admin…, each with ports, Docker files, .env credentials) and starting ALL of it together. action=detect first whenever you run, deploy, dockerize or wire up a project; action=up mode=hybrid (DB/Redis in Docker, apps local), local, or docker (the root compose builds everything); status / logs / down.',
+  'Running / deploying: never start just one app of a multi-app folder and never ignore the front end or the back end. Detect the composition, fix port conflicts, point each app at the others (API URLs, CORS) and at its services (DB host/port/user from .env), start the stack and read the logs until every part answers. A Dockerfile / compose you write must cover every app and service of the composition (build contexts, ports, env, depends_on, volumes), then prove it with otto_stack action=up mode=docker.',
   '- otto_docker: the project\'s Docker services (PostgreSQL, Redis…); run_command: shell commands in the project.',
   'When the user asks to run, show, open or switch something in Otto, do it with these tools instead of explaining how. Changes are approved by the user in the chat.',
   'Never paste code into the chat: code goes into project files (write_file), the chat gets a short summary.',
@@ -179,6 +183,15 @@ export function appTools(ctx: AppToolContext | null, approve?: (kind: 'shell' | 
         }
         const found = detectRun(ctx.root);
         const typed = str(a.command).trim();
+        // several apps in the folder (front + back…): the whole stack, not only the first one
+        if (!typed) {
+          const comp = scanComposition(ctx.root);
+          if (comp.units.reduce((n, u) => n + u.processes.length, 0) > 1) {
+            const r = await upStack(ctx.projectId, ctx.root);
+            if (r.previewUrl) ui(ctx, { action: 'preview-url', url: normalizePreviewUrl(r.previewUrl) ?? r.previewUrl });
+            return `Started the whole stack (${r.mode}):\n${r.lines.join('\n')}`;
+          }
+        }
         const chosen = found.options.find((o) => o.command === typed) ?? (typed ? undefined : found.options[0]);
         const command = typed || chosen?.command || '';
         if (!command) {
@@ -322,6 +335,37 @@ export function appTools(ctx: AppToolContext | null, approve?: (kind: 'shell' | 
           return `Deleted #${id}.`;
         }
         return 'action must be list, add, update or delete.';
+      },
+    },
+    {
+      name: 'otto_stack',
+      description: 'The whole project: action=detect lists every app in the folder (framework, how to start it, Dockerfile/compose, ports, .env connection settings with secrets hidden, the services it needs, port conflicts) and the recommended mode. action=up starts everything: mode=hybrid (databases/Redis in Docker, apps as local processes; the default when services are needed), local (only processes), docker (the root compose builds and runs all); `only` = app folders to start. action=status, action=logs (unit = app folder), action=down.',
+      properties: {
+        action: { type: 'string', enum: ['detect', 'up', 'status', 'logs', 'down'], description: 'What to do' },
+        mode: { type: 'string', enum: ['hybrid', 'local', 'docker'], description: 'How to run it (up); the recommended one when omitted' },
+        only: { type: 'array', items: { type: 'string' }, description: 'App folders to start (up), default all' },
+        unit: { type: 'string', description: 'App folder (logs)' },
+      },
+      required: ['action'],
+      approval: (a) => (['up', 'down'].includes(str(a.action)) ? { kind: 'shell', text: `Stack ${str(a.action)}${a.mode ? ` (${str(a.mode)})` : ''}${Array.isArray(a.only) && a.only.length ? `: ${a.only.join(', ')}` : ''}` } : null),
+      run: async (a) => {
+        if (!ctx?.projectId) return 'No project is selected.';
+        const action = str(a.action);
+        if (action === 'detect') {
+          const c = scanComposition(ctx.root);
+          return `${describeComposition(c)}\n\nRecommended: otto_stack action=up mode=${recommendMode(c)}.`;
+        }
+        if (action === 'status') return stackStatus(ctx.projectId);
+        if (action === 'logs') return stackLogs(ctx.projectId, str(a.unit) || undefined);
+        if (action === 'down') {
+          const out = await downStack(ctx.projectId);
+          ui(ctx, { action: 'preview-refresh' });
+          return out.join('\n') || 'Nothing was running.';
+        }
+        const mode = (['hybrid', 'local', 'docker'].includes(str(a.mode)) ? str(a.mode) : undefined) as StackMode | undefined;
+        const r = await upStack(ctx.projectId, ctx.root, mode, Array.isArray(a.only) ? a.only.map(String) : undefined);
+        if (r.previewUrl) ui(ctx, { action: 'preview-url', url: normalizePreviewUrl(r.previewUrl) ?? r.previewUrl });
+        return `Stack (${r.mode}) ${r.ok ? 'is up' : 'did NOT fully start: read the output and fix it'}:\n${r.lines.join('\n')}`;
       },
     },
     {
